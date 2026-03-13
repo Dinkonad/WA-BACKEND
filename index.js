@@ -7,7 +7,7 @@ import authRouter from './src/routes/auth.js';
 const app = express();
 app.use(cors());
 app.use(cors({
-  origin: ['https://tvoja-stranica.netlify.app', 'http://localhost:5173']
+  origin: ['https://inspector-teretana.netlify.app', 'http://localhost:5173']
 }));
 const PORT = process.env.PORT || 3000;
 
