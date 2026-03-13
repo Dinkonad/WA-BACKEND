@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { poveziNaBazu } from './src/db.js';
+import { poveziNaBazu } from './db.js';
 import authRouter from './src/routes/auth.js';
 import webauthnRouter from './src/routes/webauthn.js';
 
