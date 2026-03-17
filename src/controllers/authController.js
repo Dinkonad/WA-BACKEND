@@ -54,8 +54,8 @@ export const prijava = async (req, res) => {
     const token = generirajToken(korisnik._id);
 
     if (korisnik.strava?.accessToken) {
-      import('../controllers/stravaController.js').then(({ sinkronizirajAktivnostiPublic }) => {
-        sinkronizirajAktivnostiPublic(korisnik._id, korisnik.strava.accessToken).catch(console.error);
+      import('./stravaController.js').then(({ sinkronizirajAktivnosti }) => {
+        sinkronizirajAktivnosti(korisnik._id, korisnik.strava.accessToken).catch(console.error);
       });
     }
 

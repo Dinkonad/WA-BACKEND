@@ -30,20 +30,20 @@ const osvjeziTokenAkoTreba = async (korisnik) => {
 };
 
 export const preusmjeriNaStravu = (req, res) => {
+  const token = req.query.token || '';
   const scope = 'read,activity:read_all,profile:read_all';
-  const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=${scope}`;
+  const url = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=${scope}&state=${token}`;
   res.redirect(url);
 };
 
 export const stravaCallback = async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
 
   if (error || !code) {
     return res.redirect(`${FRONTEND_URL}/odabir-prijave?greska=strava_odbijeno`);
   }
 
   try {
-
     const tokenOdgovor = await axios.post('https://www.strava.com/oauth/token', {
       client_id: STRAVA_CLIENT_ID,
       client_secret: STRAVA_CLIENT_SECRET,
@@ -53,75 +53,73 @@ export const stravaCallback = async (req, res) => {
 
     const { access_token, refresh_token, expires_at, athlete } = tokenOdgovor.data;
 
-    let korisnik = await Korisnik.findOne({ 'strava.id': String(athlete.id) });
+    const stravaData = {
+      id: String(athlete.id),
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      tokenIstice: new Date(expires_at * 1000),
+      profilnaSlika: athlete.profile,
+      grad: athlete.city,
+      drzava: athlete.country,
+      spol: athlete.sex,
+      statistike: { zadnjaSync: new Date() },
+    };
+
+    let korisnik = null;
+
+    if (state) {
+      try {
+        const decoded = jwt.verify(state, process.env.JWT_SECRET);
+        korisnik = await Korisnik.findById(decoded.id);
+        if (korisnik) {
+          korisnik.strava = { ...korisnik.strava?.toObject?.() || {}, ...stravaData };
+          await korisnik.save({ validateBeforeSave: false });
+        }
+      } catch (e) {}
+    }
+
+    if (!korisnik) {
+      korisnik = await Korisnik.findOne({ 'strava.id': String(athlete.id) });
+      if (korisnik) {
+        korisnik.strava = { ...korisnik.strava?.toObject?.() || {}, ...stravaData };
+        await korisnik.save({ validateBeforeSave: false });
+      }
+    }
 
     if (!korisnik) {
       const email = athlete.email || `strava_${athlete.id}@teretana-inspector.app`;
       korisnik = await Korisnik.findOne({ email });
 
-      if (!korisnik) {
-    
+      if (korisnik) {
+        korisnik.strava = { ...korisnik.strava?.toObject?.() || {}, ...stravaData };
+        await korisnik.save({ validateBeforeSave: false });
+      } else {
         korisnik = await Korisnik.create({
           ime: `${athlete.firstname} ${athlete.lastname}`,
           email,
           lozinka: Math.random().toString(36) + Math.random().toString(36),
           uloga: 'korisnik',
-          strava: {
-            id: String(athlete.id),
-            accessToken: access_token,
-            refreshToken: refresh_token,
-            tokenIstice: new Date(expires_at * 1000),
-            profilnaSlika: athlete.profile,
-            grad: athlete.city,
-            drzava: athlete.country,
-            spol: athlete.sex,
-            statistike: { zadnjaSync: new Date() },
-          },
+          strava: stravaData,
         });
-      } else {
-        korisnik.strava = {
-          id: String(athlete.id),
-          accessToken: access_token,
-          refreshToken: refresh_token,
-          tokenIstice: new Date(expires_at * 1000),
-          profilnaSlika: athlete.profile,
-          grad: athlete.city,
-          drzava: athlete.country,
-          spol: athlete.sex,
-          statistike: korisnik.strava?.statistike || { zadnjaSync: new Date() },
-        };
-        if (!korisnik.ime || korisnik.ime === '') {
-          korisnik.ime = `${athlete.firstname} ${athlete.lastname}`;
-        }
-        await korisnik.save({ validateBeforeSave: false });
       }
-    } else {
-      korisnik.strava.accessToken = access_token;
-      korisnik.strava.refreshToken = refresh_token;
-      korisnik.strava.tokenIstice = new Date(expires_at * 1000);
-      korisnik.strava.profilnaSlika = athlete.profile;
-      await korisnik.save({ validateBeforeSave: false });
     }
 
     sinkronizirajAktivnosti(korisnik._id, access_token).catch(console.error);
 
-
     const token = generirajToken(korisnik._id);
     return res.redirect(`${FRONTEND_URL}/dashboard?token=${token}`);
   } catch (err) {
-    console.error('Strava callback greška:', err.response?.data || err.message);
     return res.redirect(`${FRONTEND_URL}/odabir-prijave?greska=strava_greska`);
   }
 };
 
-const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
+export const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
   try {
     const korisnik = await Korisnik.findById(korisnikId);
     if (!korisnik) return;
 
     const osvjezeni = await osvjeziTokenAkoTreba(korisnik);
     const token = osvjezeni.strava.accessToken || accessToken;
-
 
     const odgovor = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
       headers: { Authorization: `Bearer ${token}` },
@@ -146,9 +144,6 @@ const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
         maxBrzina: akt.max_speed,
         kalorije: akt.calories,
         polyline: akt.map?.summary_polyline || '',
-        karta: akt.map?.summary_polyline
-          ? `https://maps.googleapis.com/maps/api/staticmap?size=600x300&path=enc:${encodeURIComponent(akt.map.summary_polyline)}`
-          : '',
       });
     }
 
@@ -165,11 +160,9 @@ const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
 
     await korisnik.save({ validateBeforeSave: false });
   } catch (err) {
-    console.error('Greška pri sinkronizaciji aktivnosti:', err.message);
+    console.error(err.message);
   }
 };
-
-export const sinkronizirajAktivnostiPublic = sinkronizirajAktivnosti;
 
 export const pokreniSync = async (req, res) => {
   try {
@@ -192,13 +185,11 @@ export const pokreniSync = async (req, res) => {
 export const dohvatiAktivnosti = async (req, res) => {
   try {
     const korisnik = await Korisnik.findById(req.korisnik._id);
-    const stranica = parseInt(req.query.stranica) || 1;
     const velicina = parseInt(req.query.velicina) || 20;
-    const pocetak = (stranica - 1) * velicina;
 
     const sortirane = [...korisnik.aktivnosti]
       .sort((a, b) => new Date(b.datum) - new Date(a.datum))
-      .slice(pocetak, pocetak + velicina);
+      .slice(0, velicina);
 
     res.json({
       aktivnosti: sortirane,
