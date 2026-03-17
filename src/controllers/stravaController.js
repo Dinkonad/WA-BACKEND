@@ -10,7 +10,6 @@ const FRONTEND_URL = process.env.FRONTEND_URL;
 const generirajToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
 
-
 const osvjeziTokenAkoTreba = async (korisnik) => {
   if (!korisnik.strava?.refreshToken) return korisnik;
   const sad = new Date();
@@ -61,6 +60,7 @@ export const stravaCallback = async (req, res) => {
       korisnik = await Korisnik.findOne({ email });
 
       if (!korisnik) {
+    
         korisnik = await Korisnik.create({
           ime: `${athlete.firstname} ${athlete.lastname}`,
           email,
@@ -96,7 +96,6 @@ export const stravaCallback = async (req, res) => {
         await korisnik.save({ validateBeforeSave: false });
       }
     } else {
-    
       korisnik.strava.accessToken = access_token;
       korisnik.strava.refreshToken = refresh_token;
       korisnik.strava.tokenIstice = new Date(expires_at * 1000);
@@ -104,8 +103,8 @@ export const stravaCallback = async (req, res) => {
       await korisnik.save({ validateBeforeSave: false });
     }
 
-
     sinkronizirajAktivnosti(korisnik._id, access_token).catch(console.error);
+
 
     const token = generirajToken(korisnik._id);
     return res.redirect(`${FRONTEND_URL}/dashboard?token=${token}`);
@@ -115,7 +114,6 @@ export const stravaCallback = async (req, res) => {
   }
 };
 
-
 const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
   try {
     const korisnik = await Korisnik.findById(korisnikId);
@@ -124,7 +122,7 @@ const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
     const osvjezeni = await osvjeziTokenAkoTreba(korisnik);
     const token = osvjezeni.strava.accessToken || accessToken;
 
-  
+
     const odgovor = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
       headers: { Authorization: `Bearer ${token}` },
       params: { per_page: 100, page: 1 },
@@ -154,7 +152,6 @@ const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
       });
     }
 
-
     const trcanje = aktivnosti.filter(a => a.type === 'Run').reduce((s, a) => s + a.distance, 0);
     const bicikl = aktivnosti.filter(a => a.type === 'Ride').reduce((s, a) => s + a.distance, 0);
     const hodanje = aktivnosti.filter(a => a.type === 'Walk' || a.type === 'Hike').reduce((s, a) => s + a.distance, 0);
@@ -172,6 +169,7 @@ const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
   }
 };
 
+export const sinkronizirajAktivnostiPublic = sinkronizirajAktivnosti;
 
 export const pokreniSync = async (req, res) => {
   try {
