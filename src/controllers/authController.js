@@ -34,7 +34,6 @@ export const registracija = async (req, res) => {
       },
     });
   } catch (error) {
-    console.log('REGISTRACIJA ERROR:', error);
     res.status(500).json({ poruka: 'Greška na serveru.', error: error.message });
   }
 };
@@ -64,7 +63,6 @@ export const prijava = async (req, res) => {
       },
     });
   } catch (error) {
-    console.log('PRIJAVA ERROR:', error);
     res.status(500).json({ poruka: 'Greška na serveru.', error: error.message });
   }
 };
@@ -76,6 +74,12 @@ export const dohvatiProfil = async (req, res) => {
       ime: req.korisnik.ime,
       email: req.korisnik.email,
       uloga: req.korisnik.uloga,
+      strava: req.korisnik.strava ? {
+        profilnaSlika: req.korisnik.strava.profilnaSlika,
+        grad: req.korisnik.strava.grad,
+        drzava: req.korisnik.strava.drzava,
+        statistike: req.korisnik.strava.statistike,
+      } : null,
     },
   });
 };
