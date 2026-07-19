@@ -10,6 +10,19 @@ const autentifikatorSchema = new mongoose.Schema({
   transports: [{ type: String }],
 });
 
+const splitSchema = new mongoose.Schema({
+  km: { type: Number },
+  trajanje: { type: Number },
+  brzina: { type: Number },
+  visinskaRazlika: { type: Number },
+}, { _id: false });
+
+const rekordSchema = new mongoose.Schema({
+  naziv: { type: String },
+  trajanje: { type: Number },
+  rekord: { type: Number },
+}, { _id: false });
+
 const stravaAktivnostSchema = new mongoose.Schema({
   stravaId: { type: String, required: true },
   naziv: { type: String },
@@ -23,6 +36,14 @@ const stravaAktivnostSchema = new mongoose.Schema({
   kalorije: { type: Number },
   karta: { type: String },
   polyline: { type: String },
+  prosjecniPuls: { type: Number },
+  maxPuls: { type: Number },
+  elevMax: { type: Number },
+  elevMin: { type: Number },
+  uredjaj: { type: String },
+  splits: [splitSchema],
+  rekordi: [rekordSchema],
+  detaljiUcitani: { type: Boolean, default: false },
 }, { timestamps: true });
 
 const korisnikSchema = new mongoose.Schema(

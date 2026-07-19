@@ -113,6 +113,48 @@ export const stravaCallback = async (req, res) => {
   }
 };
 
+const dohvatiDetaljAktivnosti = async (token, stravaId) => {
+  const odgovor = await axios.get(`https://www.strava.com/api/v3/activities/${stravaId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return odgovor.data;
+};
+
+const MAX_DETALJA_PO_SYNCU = 50;
+
+const dopuniDetaljima = async (korisnik, token) => {
+  const zaDopunu = korisnik.aktivnosti.filter(a => !a.detaljiUcitani).slice(0, MAX_DETALJA_PO_SYNCU);
+
+  for (const a of zaDopunu) {
+    try {
+      const d = await dohvatiDetaljAktivnosti(token, a.stravaId);
+
+      a.kalorije = d.calories ?? a.kalorije;
+      a.prosjecniPuls = d.average_heartrate;
+      a.maxPuls = d.max_heartrate;
+      a.elevMax = d.elev_high;
+      a.elevMin = d.elev_low;
+      a.uredjaj = d.device_name;
+
+      a.splits = (d.splits_metric || []).map(s => ({
+        km: s.split,
+        trajanje: s.moving_time,
+        brzina: s.average_speed,
+        visinskaRazlika: s.elevation_difference,
+      }));
+
+      a.rekordi = (d.segment_efforts || [])
+        .filter(e => e.pr_rank)
+        .map(e => ({ naziv: e.name, trajanje: e.moving_time, rekord: e.pr_rank }));
+
+      a.detaljiUcitani = true;
+    } catch (e) {
+      console.error(`Detalj aktivnosti ${a.stravaId} nije uspio:`, e.response?.status, e.response?.data || e.message);
+      if (e.response?.status === 429) break;
+    }
+  }
+};
+
 export const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
   try {
     const korisnik = await Korisnik.findById(korisnikId);
@@ -146,6 +188,8 @@ export const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
         polyline: akt.map?.summary_polyline || '',
       });
     }
+
+    await dopuniDetaljima(korisnik, token);
 
     const trcanje = aktivnosti.filter(a => a.type === 'Run').reduce((s, a) => s + a.distance, 0);
     const bicikl = aktivnosti.filter(a => a.type === 'Ride').reduce((s, a) => s + a.distance, 0);
