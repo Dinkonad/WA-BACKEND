@@ -21,6 +21,11 @@ export const dohvatiFeed = async (req, res) => {
     ]);
 
     const korisnikId = String(req.korisnik._id);
+
+    const sviLajkeriId = [...new Set(rezultat.flatMap(r => (r.aktivnost.lajkovi || []).map(id => String(id))))];
+    const lajkeri = await Korisnik.find({ _id: { $in: sviLajkeriId } }).select('ime');
+    const imenaPoId = new Map(lajkeri.map(k => [String(k._id), k.ime]));
+
     const stavke = rezultat.map(r => ({
       ...r.aktivnost,
       autorId: r.autorId,
@@ -28,6 +33,7 @@ export const dohvatiFeed = async (req, res) => {
       autorSlika: r.autorSlika,
       brojLajkova: r.aktivnost.lajkovi?.length || 0,
       lajkano: (r.aktivnost.lajkovi || []).some(id => String(id) === korisnikId),
+      imenaLajkera: (r.aktivnost.lajkovi || []).map(id => imenaPoId.get(String(id))).filter(Boolean),
       lajkovi: undefined,
     }));
 
@@ -71,7 +77,10 @@ export const lajkajAktivnost = async (req, res) => {
     else akt.lajkovi.push(korisnikId);
 
     await vlasnik.save({ validateBeforeSave: false });
-    res.json({ lajkano: !vecLajkano, brojLajkova: akt.lajkovi.length });
+
+    const lajkeri = await Korisnik.find({ _id: { $in: akt.lajkovi } }).select('ime');
+
+    res.json({ lajkano: !vecLajkano, brojLajkova: akt.lajkovi.length, imenaLajkera: lajkeri.map(k => k.ime) });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri lajkanju.', error: err.message });
   }
