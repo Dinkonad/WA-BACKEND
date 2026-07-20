@@ -6,6 +6,7 @@ import authRouter from './src/routes/auth.js';
 import webauthnRouter from './src/routes/webauthn.js';
 import stravaRouter from './src/routes/strava.js';
 import feedRouter from './src/routes/feed.js';
+import izazoviRouter from './src/routes/izazovi.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use('/api', authRouter);
 app.use('/api', webauthnRouter);
 app.use('/api', stravaRouter);
 app.use('/api', feedRouter);
+app.use('/api', izazoviRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 
