@@ -5,6 +5,7 @@ import { poveziNaBazu } from './db.js';
 import authRouter from './src/routes/auth.js';
 import webauthnRouter from './src/routes/webauthn.js';
 import stravaRouter from './src/routes/strava.js';
+import feedRouter from './src/routes/feed.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,7 @@ app.use(express.json());
 app.use('/api', authRouter);
 app.use('/api', webauthnRouter);
 app.use('/api', stravaRouter);
+app.use('/api', feedRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 

@@ -23,6 +23,12 @@ const rekordSchema = new mongoose.Schema({
   rekord: { type: Number },
 }, { _id: false });
 
+const komentarSchema = new mongoose.Schema({
+  korisnikId: { type: mongoose.Schema.Types.ObjectId, ref: 'Korisnik' },
+  ime: { type: String },
+  tekst: { type: String, required: true },
+}, { timestamps: true });
+
 const stravaAktivnostSchema = new mongoose.Schema({
   stravaId: { type: String, required: true },
   naziv: { type: String },
@@ -44,6 +50,10 @@ const stravaAktivnostSchema = new mongoose.Schema({
   splits: [splitSchema],
   rekordi: [rekordSchema],
   detaljiUcitani: { type: Boolean, default: false },
+  uFeedu: { type: Boolean, default: false },
+  opis: { type: String, maxlength: 500 },
+  lajkovi: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Korisnik' }],
+  komentari: [komentarSchema],
 }, { timestamps: true });
 
 const korisnikSchema = new mongoose.Schema(
@@ -74,6 +84,8 @@ const korisnikSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+korisnikSchema.index({ 'aktivnosti._id': 1 });
 
 korisnikSchema.pre('save', async function () {
   if (!this.isModified('lozinka') || !this.lozinka) return;
