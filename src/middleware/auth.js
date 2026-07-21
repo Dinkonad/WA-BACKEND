@@ -37,3 +37,10 @@ export const samoKnjigovodstvo = (req, res, next) => {
   }
   next();
 };
+
+export const samoRecepcija = (req, res, next) => {
+  if (!['admin', 'recepcija'].includes(req.korisnik.uloga)) {
+    return res.status(403).json({ poruka: 'Pristup dozvoljen samo recepciji.' });
+  }
+  next();
+};

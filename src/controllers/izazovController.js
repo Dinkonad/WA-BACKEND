@@ -96,12 +96,6 @@ const MJERA_POLJE = {
   broj: () => 1,
 };
 
-function napredakZaUvjet(aktivnosti, uvjet) {
-  const izracunajVrijednost = MJERA_POLJE[uvjet.mjera] || (() => 0);
-  const relevantne = aktivnosti.filter(a => a.tip === uvjet.tip);
-  return relevantne.reduce((s, a) => s + izracunajVrijednost(a), 0);
-}
-
 function aktivnostSazetak(a) {
   return {
     stravaId: a.stravaId,
@@ -115,6 +109,30 @@ function aktivnostSazetak(a) {
   };
 }
 
+function bodoviIAktivnostiZaUvjet(aktivnosti, uvjet) {
+  const relevantne = aktivnosti.filter(a => a.tip === uvjet.tip);
+
+  if (uvjet.mjera === 'broj') {
+    const napredak = relevantne.length;
+    const bodovi = Math.floor(napredak / uvjet.cilj) * uvjet.bodovi;
+    return { bodovi, napredak, aktivnosti: relevantne.map(a => ({ ...aktivnostSazetak(a), bodoviOstvareno: null })) };
+  }
+
+  const izracunajVrijednost = MJERA_POLJE[uvjet.mjera] || (() => 0);
+  let bodovi = 0;
+  let napredak = 0;
+
+  const aktivnostiDetalji = relevantne.map(a => {
+    const vrijednost = izracunajVrijednost(a);
+    napredak += vrijednost;
+    const bodoviZaAktivnost = Math.floor(vrijednost / uvjet.cilj) * uvjet.bodovi;
+    bodovi += bodoviZaAktivnost;
+    return { ...aktivnostSazetak(a), bodoviOstvareno: bodoviZaAktivnost };
+  });
+
+  return { bodovi, napredak, aktivnosti: aktivnostiDetalji };
+}
+
 function izracunajKumulativno(korisnik, izazov, odDatuma) {
   const uPeriodu = korisnik.aktivnosti.filter(a =>
     new Date(a.datum) >= odDatuma && new Date(a.datum) <= krajDana(izazov.kraj)
@@ -122,9 +140,7 @@ function izracunajKumulativno(korisnik, izazov, odDatuma) {
 
   let bodovi = 0;
   const uvjeti = izazov.uvjeti.map(uvjet => {
-    const relevantne = uPeriodu.filter(a => a.tip === uvjet.tip);
-    const napredak = napredakZaUvjet(relevantne, uvjet);
-    const uvjetBodovi = Math.floor(napredak / uvjet.cilj) * uvjet.bodovi;
+    const { bodovi: uvjetBodovi, napredak, aktivnosti } = bodoviIAktivnostiZaUvjet(uPeriodu, uvjet);
     bodovi += uvjetBodovi;
 
     return {
@@ -134,7 +150,7 @@ function izracunajKumulativno(korisnik, izazov, odDatuma) {
       bodoviPoPragu: uvjet.bodovi,
       napredak,
       bodoviOstvareno: uvjetBodovi,
-      aktivnosti: relevantne.map(aktivnostSazetak),
+      aktivnosti,
     };
   });
 
@@ -175,11 +191,24 @@ function izracunajDnevno(korisnik, izazov, odDatuma) {
     const ispunjeniUvjeti = [];
 
     izazov.uvjeti.forEach(uvjet => {
-      const napredak = napredakZaUvjet(dnevneAktivnosti, uvjet);
-      if (napredak >= uvjet.cilj) {
+      const relevantne = dnevneAktivnosti.filter(a => a.tip === uvjet.tip);
+
+      if (uvjet.mjera === 'broj') {
+        if (relevantne.length >= uvjet.cilj) {
+          danBodovi += uvjet.bodovi;
+          danProsao = true;
+          ispunjeniUvjeti.push({ tip: uvjet.tip, mjera: uvjet.mjera, cilj: uvjet.cilj, napredak: relevantne.length, bodovi: uvjet.bodovi });
+        }
+        return;
+      }
+
+      const izracunajVrijednost = MJERA_POLJE[uvjet.mjera] || (() => 0);
+      const najboljaVrijednost = relevantne.reduce((maks, a) => Math.max(maks, izracunajVrijednost(a)), 0);
+
+      if (najboljaVrijednost >= uvjet.cilj) {
         danBodovi += uvjet.bodovi;
         danProsao = true;
-        ispunjeniUvjeti.push({ tip: uvjet.tip, mjera: uvjet.mjera, cilj: uvjet.cilj, napredak, bodovi: uvjet.bodovi });
+        ispunjeniUvjeti.push({ tip: uvjet.tip, mjera: uvjet.mjera, cilj: uvjet.cilj, napredak: najboljaVrijednost, bodovi: uvjet.bodovi });
       }
     });
 

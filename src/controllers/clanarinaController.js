@@ -1,4 +1,6 @@
+import jwt from 'jsonwebtoken';
 import Clanarina from '../models/clanarina.js';
+import Korisnik from '../models/korisnik.js';
 
 export const PLANOVI = {
   student: { naziv: 'Student', mjesecno: 25, znacajke: ['Pristup teretani', 'Od 8 do 15 sati'] },
@@ -38,10 +40,22 @@ export const posaljiZahtjev = async (req, res) => {
   }
 };
 
+const TRAJANJE_DANA = 30;
+
 export const dohvatiMojZahtjev = async (req, res) => {
   try {
     const zahtjev = await Clanarina.findOne({ korisnikId: req.korisnik._id }).sort({ createdAt: -1 });
-    res.json({ zahtjev });
+
+    let vrijediDo = null;
+    let istekla = false;
+
+    if (zahtjev && zahtjev.status === 'odobreno' && zahtjev.datumObrade) {
+      vrijediDo = new Date(zahtjev.datumObrade);
+      vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+      istekla = new Date() > vrijediDo;
+    }
+
+    res.json({ zahtjev, vrijediDo, istekla });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri dohvaćanju zahtjeva.', error: err.message });
   }
@@ -92,5 +106,83 @@ export const odbijZahtjev = async (req, res) => {
     res.json({ zahtjev });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri odbijanju.', error: err.message });
+  }
+};
+
+export const dohvatiQrKod = async (req, res) => {
+  try {
+    const zahtjev = await Clanarina.findOne({ korisnikId: req.korisnik._id }).sort({ createdAt: -1 });
+
+    if (!zahtjev || zahtjev.status !== 'odobreno' || !zahtjev.datumObrade) {
+      return res.json({ token: null });
+    }
+
+    const vrijediDo = new Date(zahtjev.datumObrade);
+    vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+
+    if (new Date() > vrijediDo) {
+      return res.json({ token: null });
+    }
+
+    const token = jwt.sign(
+      { korisnikId: String(req.korisnik._id), zahtjevId: String(zahtjev._id) },
+      process.env.JWT_SECRET,
+      { expiresIn: Math.floor((vrijediDo.getTime() - Date.now()) / 1000) }
+    );
+
+    res.json({ token, vrijediDo });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri generiranju QR koda.', error: err.message });
+  }
+};
+
+export const provjeriQrKod = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ validno: false, poruka: 'Nedostaje kod.' });
+
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      return res.json({ validno: false, poruka: 'QR kod je istekao ili nije valjan.' });
+    }
+
+    if (!payload.zahtjevId) {
+      return res.json({ validno: false, poruka: 'QR kod nije valjan.' });
+    }
+
+    const zahtjev = await Clanarina.findById(payload.zahtjevId);
+    if (!zahtjev || zahtjev.status !== 'odobreno') {
+      return res.json({ validno: false, poruka: 'Članarina više nije aktivna.' });
+    }
+
+    const vrijediDo = new Date(zahtjev.datumObrade);
+    vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+    if (new Date() > vrijediDo) {
+      return res.json({ validno: false, poruka: 'Članarina je istekla.' });
+    }
+
+    const korisnik = await Korisnik.findById(payload.korisnikId).select('ime strava.profilnaSlika');
+
+    res.json({
+      validno: true,
+      ime: korisnik?.ime || zahtjev.imePrezime,
+      slika: korisnik?.strava?.profilnaSlika || null,
+      plan: zahtjev.plan,
+      vrijediDo,
+    });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri provjeri QR koda.', error: err.message });
+  }
+};
+
+export const obrisiZahtjev = async (req, res) => {
+  try {
+    const zahtjev = await Clanarina.findByIdAndDelete(req.params.id);
+    if (!zahtjev) return res.status(404).json({ poruka: 'Zahtjev nije pronađen.' });
+    res.json({ poruka: 'Zahtjev obrisan.' });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri brisanju.', error: err.message });
   }
 };

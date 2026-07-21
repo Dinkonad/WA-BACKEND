@@ -61,7 +61,7 @@ const korisnikSchema = new mongoose.Schema(
     ime: { type: String, required: [true, 'Ime je obavezno'], trim: true },
     email: { type: String, required: [true, 'Email je obavezan'], unique: true, lowercase: true, trim: true },
     lozinka: { type: String, minlength: [6, 'Lozinka mora imati najmanje 6 znakova'] },
-    uloga: { type: String, enum: ['korisnik', 'admin', 'knjigovodstvo'], default: 'korisnik' },
+    uloga: { type: String, enum: ['korisnik', 'admin', 'knjigovodstvo', 'recepcija'], default: 'korisnik' },
     webauthnChallenge: { type: String },
     autentifikatori: [autentifikatorSchema],
     strava: {
