@@ -30,3 +30,10 @@ export const samoadmin = (req, res, next) => {
   }
   next();
 };
+
+export const samoKnjigovodstvo = (req, res, next) => {
+  if (!['admin', 'knjigovodstvo'].includes(req.korisnik.uloga)) {
+    return res.status(403).json({ poruka: 'Pristup dozvoljen samo knjigovodstvu.' });
+  }
+  next();
+};

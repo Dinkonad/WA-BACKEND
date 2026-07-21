@@ -17,6 +17,9 @@ const sudionikSchema = new mongoose.Schema({
   korisnikId: { type: mongoose.Schema.Types.ObjectId, ref: 'Korisnik', required: true },
   timId: { type: mongoose.Schema.Types.ObjectId },
   datumPridruzivanja: { type: Date, default: Date.now },
+  bodovi: { type: Number, default: 0 },
+  status: { type: String, enum: ['aktivan', 'eliminiran'], default: 'aktivan' },
+  eliminiranDatum: { type: Date, default: null },
 }, { _id: false });
 
 const izazovSchema = new mongoose.Schema(
@@ -33,6 +36,7 @@ const izazovSchema = new mongoose.Schema(
     },
     timovi: [timSchema],
     sudionici: [sudionikSchema],
+    ljestvicaAzurirana: { type: Date, default: null },
     kreiraoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Korisnik' },
   },
   { timestamps: true }

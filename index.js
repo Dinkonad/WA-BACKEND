@@ -7,6 +7,7 @@ import webauthnRouter from './src/routes/webauthn.js';
 import stravaRouter from './src/routes/strava.js';
 import feedRouter from './src/routes/feed.js';
 import izazoviRouter from './src/routes/izazovi.js';
+import clanarinaRouter from './src/routes/clanarina.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,6 +28,7 @@ app.use('/api', webauthnRouter);
 app.use('/api', stravaRouter);
 app.use('/api', feedRouter);
 app.use('/api', izazoviRouter);
+app.use('/api', clanarinaRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 

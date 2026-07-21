@@ -102,18 +102,43 @@ function napredakZaUvjet(aktivnosti, uvjet) {
   return relevantne.reduce((s, a) => s + izracunajVrijednost(a), 0);
 }
 
-function izracunajKumulativno(korisnik, izazov, odDatuma) {
-  let bodovi = 0;
+function aktivnostSazetak(a) {
+  return {
+    stravaId: a.stravaId,
+    naziv: a.naziv,
+    tip: a.tip,
+    datum: a.datum,
+    udaljenost: a.udaljenost,
+    trajanje: a.trajanje,
+    kalorije: a.kalorije,
+    visinskaRazlika: a.visinskaRazlika,
+  };
+}
 
-  izazov.uvjeti.forEach(uvjet => {
-    const relevantne = korisnik.aktivnosti.filter(a =>
-      new Date(a.datum) >= odDatuma && new Date(a.datum) <= krajDana(izazov.kraj)
-    );
+function izracunajKumulativno(korisnik, izazov, odDatuma) {
+  const uPeriodu = korisnik.aktivnosti.filter(a =>
+    new Date(a.datum) >= odDatuma && new Date(a.datum) <= krajDana(izazov.kraj)
+  );
+
+  let bodovi = 0;
+  const uvjeti = izazov.uvjeti.map(uvjet => {
+    const relevantne = uPeriodu.filter(a => a.tip === uvjet.tip);
     const napredak = napredakZaUvjet(relevantne, uvjet);
-    bodovi += Math.floor(napredak / uvjet.cilj) * uvjet.bodovi;
+    const uvjetBodovi = Math.floor(napredak / uvjet.cilj) * uvjet.bodovi;
+    bodovi += uvjetBodovi;
+
+    return {
+      tip: uvjet.tip,
+      mjera: uvjet.mjera,
+      cilj: uvjet.cilj,
+      bodoviPoPragu: uvjet.bodovi,
+      napredak,
+      bodoviOstvareno: uvjetBodovi,
+      aktivnosti: relevantne.map(aktivnostSazetak),
+    };
   });
 
-  return { bodovi, status: 'aktivan', eliminiranDatum: null };
+  return { bodovi, status: 'aktivan', eliminiranDatum: null, uvjeti };
 }
 
 function pocetakDana(datum) {
@@ -141,17 +166,29 @@ function izracunajDnevno(korisnik, izazov, odDatuma) {
   let bodovi = 0;
   let status = 'aktivan';
   let eliminiranDatum = null;
+  const dani = [];
 
   while (dan <= zadnjiDanZaProvjeru) {
     const dnevneAktivnosti = korisnik.aktivnosti.filter(a => istiDan(new Date(a.datum), dan));
     let danProsao = false;
+    let danBodovi = 0;
+    const ispunjeniUvjeti = [];
 
     izazov.uvjeti.forEach(uvjet => {
       const napredak = napredakZaUvjet(dnevneAktivnosti, uvjet);
       if (napredak >= uvjet.cilj) {
-        bodovi += uvjet.bodovi;
+        danBodovi += uvjet.bodovi;
         danProsao = true;
+        ispunjeniUvjeti.push({ tip: uvjet.tip, mjera: uvjet.mjera, cilj: uvjet.cilj, napredak, bodovi: uvjet.bodovi });
       }
+    });
+
+    dani.push({
+      datum: new Date(dan),
+      prosao: danProsao,
+      bodovi: danBodovi,
+      uvjetiIspunjeni: ispunjeniUvjeti,
+      aktivnosti: dnevneAktivnosti.map(aktivnostSazetak),
     });
 
     if (!danProsao) {
@@ -160,10 +197,11 @@ function izracunajDnevno(korisnik, izazov, odDatuma) {
       break;
     }
 
+    bodovi += danBodovi;
     dan.setDate(dan.getDate() + 1);
   }
 
-  return { bodovi, status, eliminiranDatum };
+  return { bodovi, status, eliminiranDatum, dani };
 }
 
 export const dohvatiLjestvicu = async (req, res) => {
@@ -172,25 +210,20 @@ export const dohvatiLjestvicu = async (req, res) => {
     if (!izazov) return res.status(404).json({ poruka: 'Izazov nije pronađen.' });
 
     const korisniciIds = izazov.sudionici.map(s => s.korisnikId);
-    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('ime strava.profilnaSlika aktivnosti');
+    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('ime strava.profilnaSlika');
 
     const ljestvica = izazov.sudionici
       .map(sudionik => {
         const korisnik = korisnici.find(k => k._id.equals(sudionik.korisnikId));
         if (!korisnik) return null;
 
-        const odDatuma = sudionik.datumPridruzivanja > izazov.pocetak ? sudionik.datumPridruzivanja : izazov.pocetak;
-        const rezultat = izazov.nacin === 'dnevno'
-          ? izracunajDnevno(korisnik, izazov, odDatuma)
-          : izracunajKumulativno(korisnik, izazov, odDatuma);
-
         return {
           korisnikId: korisnik._id,
           ime: korisnik.ime,
           slika: korisnik.strava?.profilnaSlika || null,
-          bodovi: rezultat.bodovi,
-          status: rezultat.status,
-          eliminiranDatum: rezultat.eliminiranDatum,
+          bodovi: sudionik.bodovi,
+          status: sudionik.status,
+          eliminiranDatum: sudionik.eliminiranDatum,
         };
       })
       .filter(Boolean)
@@ -199,9 +232,69 @@ export const dohvatiLjestvicu = async (req, res) => {
         return b.bodovi - a.bodovi;
       });
 
-    res.json({ ljestvica });
+    res.json({ ljestvica, azurirana: izazov.ljestvicaAzurirana });
   } catch (err) {
-    res.status(500).json({ poruka: 'Greška pri računanju ljestvice.', error: err.message });
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju ljestvice.', error: err.message });
+  }
+};
+
+export const osvjeziLjestvicu = async (req, res) => {
+  try {
+    const izazov = await Izazov.findById(req.params.id);
+    if (!izazov) return res.status(404).json({ poruka: 'Izazov nije pronađen.' });
+
+    const korisniciIds = izazov.sudionici.map(s => s.korisnikId);
+    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('aktivnosti');
+
+    izazov.sudionici.forEach(sudionik => {
+      const korisnik = korisnici.find(k => k._id.equals(sudionik.korisnikId));
+      if (!korisnik) return;
+
+      const odDatuma = sudionik.datumPridruzivanja > izazov.pocetak ? sudionik.datumPridruzivanja : izazov.pocetak;
+      const rezultat = izazov.nacin === 'dnevno'
+        ? izracunajDnevno(korisnik, izazov, odDatuma)
+        : izracunajKumulativno(korisnik, izazov, odDatuma);
+
+      sudionik.bodovi = rezultat.bodovi;
+      sudionik.status = rezultat.status;
+      sudionik.eliminiranDatum = rezultat.eliminiranDatum;
+    });
+
+    izazov.ljestvicaAzurirana = new Date();
+    await izazov.save();
+
+    res.json({ azurirana: izazov.ljestvicaAzurirana });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri osvježavanju ljestvice.', error: err.message });
+  }
+};
+
+export const dohvatiSudionikDetalje = async (req, res) => {
+  try {
+    const izazov = await Izazov.findById(req.params.id);
+    if (!izazov) return res.status(404).json({ poruka: 'Izazov nije pronađen.' });
+
+    const sudionik = izazov.sudionici.find(s => String(s.korisnikId) === req.params.korisnikId);
+    if (!sudionik) return res.status(404).json({ poruka: 'Sudionik nije pronađen u ovom izazovu.' });
+
+    const korisnik = await Korisnik.findById(sudionik.korisnikId).select('ime strava.profilnaSlika aktivnosti');
+    if (!korisnik) return res.status(404).json({ poruka: 'Korisnik ne postoji.' });
+
+    const odDatuma = sudionik.datumPridruzivanja > izazov.pocetak ? sudionik.datumPridruzivanja : izazov.pocetak;
+    const rezultat = izazov.nacin === 'dnevno'
+      ? izracunajDnevno(korisnik, izazov, odDatuma)
+      : izracunajKumulativno(korisnik, izazov, odDatuma);
+
+    res.json({
+      korisnikId: korisnik._id,
+      ime: korisnik.ime,
+      slika: korisnik.strava?.profilnaSlika || null,
+      datumPridruzivanja: sudionik.datumPridruzivanja,
+      nacin: izazov.nacin,
+      ...rezultat,
+    });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju detalja.', error: err.message });
   }
 };
 
