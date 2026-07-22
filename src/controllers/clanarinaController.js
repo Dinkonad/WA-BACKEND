@@ -1,6 +1,16 @@
 import jwt from 'jsonwebtoken';
 import Clanarina from '../models/clanarina.js';
 import Korisnik from '../models/korisnik.js';
+import Ulazak from '../models/ulazak.js';
+
+const DNEVNI_LIMIT_ULAZAKA = 2;
+const PROZOR_PROCJENE_SATI = 1.5;
+
+function pocetakDana() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export const PLANOVI = {
   student: { naziv: 'Student', mjesecno: 25, znacajke: ['Pristup teretani', 'Od 8 do 15 sati'] },
@@ -163,6 +173,20 @@ export const provjeriQrKod = async (req, res) => {
       return res.json({ validno: false, poruka: 'Članarina je istekla.' });
     }
 
+    const ulazakaDanas = await Ulazak.countDocuments({
+      korisnikId: payload.korisnikId,
+      createdAt: { $gte: pocetakDana() },
+    });
+
+    if (ulazakaDanas >= DNEVNI_LIMIT_ULAZAKA) {
+      return res.json({
+        validno: false,
+        poruka: `Iskorišten dnevni limit od ${DNEVNI_LIMIT_ULAZAKA} ulaska.`,
+      });
+    }
+
+    await Ulazak.create({ korisnikId: payload.korisnikId });
+
     const korisnik = await Korisnik.findById(payload.korisnikId).select('ime strava.profilnaSlika');
 
     res.json({
@@ -171,9 +195,21 @@ export const provjeriQrKod = async (req, res) => {
       slika: korisnik?.strava?.profilnaSlika || null,
       plan: zahtjev.plan,
       vrijediDo,
+      ulazakBroj: ulazakaDanas + 1,
+      ulazakLimit: DNEVNI_LIMIT_ULAZAKA,
     });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri provjeri QR koda.', error: err.message });
+  }
+};
+
+export const dohvatiBrojUTeretani = async (req, res) => {
+  try {
+    const odVremena = new Date(Date.now() - PROZOR_PROCJENE_SATI * 60 * 60 * 1000);
+    const korisniciId = await Ulazak.distinct('korisnikId', { createdAt: { $gte: odVremena } });
+    res.json({ broj: korisniciId.length, prozorSati: PROZOR_PROCJENE_SATI });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju broja.', error: err.message });
   }
 };
 
