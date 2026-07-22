@@ -10,6 +10,8 @@ import {
   dohvatiQrKod,
   provjeriQrKod,
   dohvatiBrojUTeretani,
+  dohvatiRetenciju,
+  dohvatiIskoristenost,
 } from '../controllers/clanarinaController.js';
 import { zastitiRutu, samoKnjigovodstvo, samoRecepcija } from '../middleware/auth.js';
 
@@ -21,6 +23,8 @@ router.get('/clanarina/moja', zastitiRutu, dohvatiMojZahtjev);
 router.get('/clanarina/qr', zastitiRutu, dohvatiQrKod);
 router.get('/clanarina/broj-u-teretani', zastitiRutu, dohvatiBrojUTeretani);
 router.post('/clanarina/qr/provjeri', zastitiRutu, samoRecepcija, provjeriQrKod);
+router.get('/clanarina/retencija', zastitiRutu, samoKnjigovodstvo, dohvatiRetenciju);
+router.get('/clanarina/iskoristenost', zastitiRutu, samoKnjigovodstvo, dohvatiIskoristenost);
 router.get('/clanarina', zastitiRutu, samoKnjigovodstvo, dohvatiZahtjeve);
 router.put('/clanarina/:id/odobri', zastitiRutu, samoKnjigovodstvo, odobriZahtjev);
 router.put('/clanarina/:id/odbij', zastitiRutu, samoKnjigovodstvo, odbijZahtjev);

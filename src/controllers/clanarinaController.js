@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import Clanarina from '../models/clanarina.js';
 import Korisnik from '../models/korisnik.js';
 import Ulazak from '../models/ulazak.js';
+import Financija from '../models/financija.js';
 
 const DNEVNI_LIMIT_ULAZAKA = 2;
 const PROZOR_PROCJENE_SATI = 1.5;
@@ -95,6 +96,18 @@ export const odobriZahtjev = async (req, res) => {
     zahtjev.obradioId = req.korisnik._id;
     zahtjev.datumObrade = new Date();
     await zahtjev.save();
+
+    await Financija.create({
+      vrsta: 'prihod',
+      kategorija: 'Članarina',
+      ime: zahtjev.imePrezime,
+      iznos: zahtjev.cijena,
+      opis: `${zahtjev.plan.toUpperCase()} · ${zahtjev.period === 'godisnje' ? 'godišnje' : 'mjesečno'}`,
+      datum: zahtjev.datumObrade,
+      automatski: true,
+      clanarinaId: zahtjev._id,
+      kreiraoId: req.korisnik._id,
+    });
 
     res.json({ zahtjev });
   } catch (err) {
@@ -210,6 +223,116 @@ export const dohvatiBrojUTeretani = async (req, res) => {
     res.json({ broj: korisniciId.length, prozorSati: PROZOR_PROCJENE_SATI });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri dohvaćanju broja.', error: err.message });
+  }
+};
+
+function zadnjiZahtjevPoKorisniku(zahtjevi) {
+  const mapa = new Map();
+  for (const z of zahtjevi) {
+    const kId = String(z.korisnikId?._id || z.korisnikId);
+    if (!mapa.has(kId)) mapa.set(kId, z);
+  }
+  return mapa;
+}
+
+export const dohvatiRetenciju = async (req, res) => {
+  try {
+    const svi = await Clanarina.find()
+      .populate('korisnikId', 'ime email')
+      .sort({ createdAt: -1 });
+
+    const zadnji = zadnjiZahtjevPoKorisniku(svi);
+    const sada = new Date();
+
+    let aktivnih = 0;
+    let istekli = 0;
+    let naCekanju = 0;
+    const churnLista = [];
+
+    for (const z of zadnji.values()) {
+      if (z.status === 'na_cekanju') {
+        naCekanju++;
+        continue;
+      }
+      if (z.status !== 'odobreno' || !z.datumObrade) continue;
+
+      const vrijediDo = new Date(z.datumObrade);
+      vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+
+      if (sada > vrijediDo) {
+        istekli++;
+        const danaOdIsteka = Math.floor((sada.getTime() - vrijediDo.getTime()) / (1000 * 60 * 60 * 24));
+        churnLista.push({
+          ime: z.korisnikId?.ime || z.imePrezime,
+          email: z.korisnikId?.email || null,
+          plan: z.plan,
+          period: z.period,
+          istekaoDatum: vrijediDo,
+          danaOdIsteka,
+        });
+      } else {
+        aktivnih++;
+      }
+    }
+
+    churnLista.sort((a, b) => b.danaOdIsteka - a.danaOdIsteka);
+
+    res.json({ aktivnih, istekli, naCekanju, churnLista });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju retencije.', error: err.message });
+  }
+};
+
+const PROZOR_ISKORISTENOSTI_DANA = 30;
+
+export const dohvatiIskoristenost = async (req, res) => {
+  try {
+    const odobreni = await Clanarina.find({ status: 'odobreno' }).sort({ createdAt: -1 });
+    const zadnji = zadnjiZahtjevPoKorisniku(odobreni);
+    const sada = new Date();
+
+    const poPlanu = {};
+    for (const z of zadnji.values()) {
+      if (!z.datumObrade) continue;
+      const vrijediDo = new Date(z.datumObrade);
+      vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+      if (sada > vrijediDo) continue;
+
+      if (!poPlanu[z.plan]) poPlanu[z.plan] = { korisnici: [], ukupnaCijena: 0 };
+      poPlanu[z.plan].korisnici.push(String(z.korisnikId));
+      poPlanu[z.plan].ukupnaCijena += z.cijena;
+    }
+
+    const odVremena = new Date(sada.getTime() - PROZOR_ISKORISTENOSTI_DANA * 24 * 60 * 60 * 1000);
+    const ulasci = await Ulazak.find({ createdAt: { $gte: odVremena } }).select('korisnikId');
+    const ulazakPoKorisniku = {};
+    for (const u of ulasci) {
+      const kId = String(u.korisnikId);
+      ulazakPoKorisniku[kId] = (ulazakPoKorisniku[kId] || 0) + 1;
+    }
+
+    const podaciPoPlanu = Object.entries(poPlanu).map(([plan, info]) => {
+      const brojClanova = info.korisnici.length;
+      const ukupnoUlazaka = info.korisnici.reduce((s, kId) => s + (ulazakPoKorisniku[kId] || 0), 0);
+      const cijenaPoPosjeti = ukupnoUlazaka > 0 ? info.ukupnaCijena / ukupnoUlazaka : null;
+
+      return {
+        plan,
+        brojClanova,
+        ukupnoUlazaka,
+        prosjecnoUlazakaPoClanu: brojClanova ? Math.round((ukupnoUlazaka / brojClanova) * 10) / 10 : 0,
+        cijenaPoPosjeti: cijenaPoPosjeti !== null ? Math.round(cijenaPoPosjeti * 100) / 100 : null,
+      };
+    });
+
+    const ukupnoClanova = podaciPoPlanu.reduce((s, p) => s + p.brojClanova, 0);
+    const ukupnoUlazaka = podaciPoPlanu.reduce((s, p) => s + p.ukupnoUlazaka, 0);
+    const ukupnaCijenaSvih = Object.values(poPlanu).reduce((s, info) => s + info.ukupnaCijena, 0);
+    const prosjecnaCijenaPoPosjeti = ukupnoUlazaka > 0 ? Math.round((ukupnaCijenaSvih / ukupnoUlazaka) * 100) / 100 : null;
+
+    res.json({ podaciPoPlanu, ukupnoClanova, ukupnoUlazaka, prosjecnaCijenaPoPosjeti, prozorDana: PROZOR_ISKORISTENOSTI_DANA });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju iskorištenosti.', error: err.message });
   }
 };
 
