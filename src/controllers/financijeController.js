@@ -1,7 +1,7 @@
 import Financija from '../models/financija.js';
 
 export const KATEGORIJE = {
-  prihod: ['Članarina', 'Sponzorstvo', 'Ostalo'],
+  prihod: ['Donacije', 'Sponzorstvo', 'Ostalo'],
   rashod: ['Zaposlenici', 'Režije', 'Oprema', 'Ostalo'],
 };
 

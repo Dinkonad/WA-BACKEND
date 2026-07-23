@@ -5,7 +5,6 @@ import Ulazak from '../models/ulazak.js';
 import Financija from '../models/financija.js';
 
 const DNEVNI_LIMIT_ULAZAKA = 2;
-const PROZOR_PROCJENE_SATI = 1.5;
 
 function pocetakDana() {
   const d = new Date();
@@ -161,8 +160,11 @@ export const dohvatiQrKod = async (req, res) => {
 
 export const provjeriQrKod = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, tip } = req.body;
     if (!token) return res.status(400).json({ validno: false, poruka: 'Nedostaje kod.' });
+    if (!['ulaz', 'izlaz'].includes(tip)) {
+      return res.status(400).json({ validno: false, poruka: 'Nedostaje tip prolaska (ulaz/izlaz).' });
+    }
 
     let payload;
     try {
@@ -186,30 +188,44 @@ export const provjeriQrKod = async (req, res) => {
       return res.json({ validno: false, poruka: 'Članarina je istekla.' });
     }
 
-    const ulazakaDanas = await Ulazak.countDocuments({
+    const danasnji = await Ulazak.find({
       korisnikId: payload.korisnikId,
       createdAt: { $gte: pocetakDana() },
-    });
+    }).sort({ createdAt: 1 });
 
-    if (ulazakaDanas >= DNEVNI_LIMIT_ULAZAKA) {
-      return res.json({
-        validno: false,
-        poruka: `Iskorišten dnevni limit od ${DNEVNI_LIMIT_ULAZAKA} ulaska.`,
-      });
+    const zadnji = danasnji[danasnji.length - 1] || null;
+    const brojUlazaka = danasnji.filter(u => u.tip === 'ulaz').length;
+    const brojIzlazaka = danasnji.filter(u => u.tip === 'izlaz').length;
+
+    if (tip === 'ulaz') {
+      if (zadnji?.tip === 'ulaz') {
+        return res.json({ validno: false, poruka: 'Član je već evidentiran kao "u teretani". Prvo skeniraj izlazak.' });
+      }
+      if (brojUlazaka >= DNEVNI_LIMIT_ULAZAKA) {
+        return res.json({ validno: false, poruka: `Iskorišten dnevni limit od ${DNEVNI_LIMIT_ULAZAKA} ulaska.` });
+      }
+    } else {
+      if (!zadnji || zadnji.tip !== 'ulaz') {
+        return res.json({ validno: false, poruka: 'Član nije evidentiran kao da je u teretani danas.' });
+      }
+      if (brojIzlazaka >= DNEVNI_LIMIT_ULAZAKA) {
+        return res.json({ validno: false, poruka: `Iskorišten dnevni limit od ${DNEVNI_LIMIT_ULAZAKA} izlaska.` });
+      }
     }
 
-    await Ulazak.create({ korisnikId: payload.korisnikId });
+    await Ulazak.create({ korisnikId: payload.korisnikId, tip });
 
     const korisnik = await Korisnik.findById(payload.korisnikId).select('ime strava.profilnaSlika');
 
     res.json({
       validno: true,
+      tip,
       ime: korisnik?.ime || zahtjev.imePrezime,
       slika: korisnik?.strava?.profilnaSlika || null,
       plan: zahtjev.plan,
       vrijediDo,
-      ulazakBroj: ulazakaDanas + 1,
-      ulazakLimit: DNEVNI_LIMIT_ULAZAKA,
+      brojDanas: tip === 'ulaz' ? brojUlazaka + 1 : brojIzlazaka + 1,
+      limitDanas: DNEVNI_LIMIT_ULAZAKA,
     });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri provjeri QR koda.', error: err.message });
@@ -218,9 +234,13 @@ export const provjeriQrKod = async (req, res) => {
 
 export const dohvatiBrojUTeretani = async (req, res) => {
   try {
-    const odVremena = new Date(Date.now() - PROZOR_PROCJENE_SATI * 60 * 60 * 1000);
-    const korisniciId = await Ulazak.distinct('korisnikId', { createdAt: { $gte: odVremena } });
-    res.json({ broj: korisniciId.length, prozorSati: PROZOR_PROCJENE_SATI });
+    const danasnji = await Ulazak.find({ createdAt: { $gte: pocetakDana() } }).sort({ createdAt: 1 });
+    const zadnjiPoKorisniku = new Map();
+    for (const u of danasnji) {
+      zadnjiPoKorisniku.set(String(u.korisnikId), u.tip);
+    }
+    const broj = [...zadnjiPoKorisniku.values()].filter(tip => tip === 'ulaz').length;
+    res.json({ broj });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri dohvaćanju broja.', error: err.message });
   }

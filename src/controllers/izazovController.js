@@ -174,9 +174,8 @@ function istiDan(a, b) {
 }
 
 function izracunajDnevno(korisnik, izazov, odDatuma) {
-  const jucer = pocetakDana(new Date());
-  jucer.setDate(jucer.getDate() - 1);
-  const zadnjiDanZaProvjeru = izazov.kraj < jucer ? pocetakDana(izazov.kraj) : jucer;
+  const danas = pocetakDana(new Date());
+  const zadnjiDanZaProvjeru = izazov.kraj < danas ? pocetakDana(izazov.kraj) : danas;
 
   let dan = pocetakDana(odDatuma);
   let bodovi = 0;
@@ -185,6 +184,7 @@ function izracunajDnevno(korisnik, izazov, odDatuma) {
   const dani = [];
 
   while (dan <= zadnjiDanZaProvjeru) {
+    const jeDanasnji = istiDan(dan, danas);
     const dnevneAktivnosti = korisnik.aktivnosti.filter(a => istiDan(new Date(a.datum), dan));
     let danProsao = false;
     let danBodovi = 0;
@@ -220,13 +220,14 @@ function izracunajDnevno(korisnik, izazov, odDatuma) {
       aktivnosti: dnevneAktivnosti.map(aktivnostSazetak),
     });
 
-    if (!danProsao) {
+    if (danProsao) {
+      bodovi += danBodovi;
+    } else if (!jeDanasnji) {
       status = 'eliminiran';
       eliminiranDatum = new Date(dan);
       break;
     }
 
-    bodovi += danBodovi;
     dan.setDate(dan.getDate() + 1);
   }
 
