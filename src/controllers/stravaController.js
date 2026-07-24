@@ -157,10 +157,10 @@ const dopuniDetaljima = async (korisnik, token) => {
 
 export const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
   try {
-    const korisnik = await Korisnik.findById(korisnikId);
-    if (!korisnik) return;
+    const korisnikPrije = await Korisnik.findById(korisnikId);
+    if (!korisnikPrije) return;
 
-    const osvjezeni = await osvjeziTokenAkoTreba(korisnik);
+    const osvjezeni = await osvjeziTokenAkoTreba(korisnikPrije);
     const token = osvjezeni.strava.accessToken || accessToken;
 
     const odgovor = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
@@ -170,24 +170,32 @@ export const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
 
     const aktivnosti = odgovor.data;
 
+    // Atomski $push uz uvjet da stravaId još ne postoji - sprječava duplikate
+    // ako se sinkronizacija pokrene istovremeno iz dva mjesta (login + ručni sync).
     for (const akt of aktivnosti) {
-      const postoji = korisnik.aktivnosti.some(a => a.stravaId === String(akt.id));
-      if (postoji) continue;
-
-      korisnik.aktivnosti.push({
-        stravaId: String(akt.id),
-        naziv: akt.name,
-        tip: akt.type,
-        datum: new Date(akt.start_date),
-        trajanje: akt.moving_time,
-        udaljenost: akt.distance,
-        visinskaRazlika: akt.total_elevation_gain,
-        prosjecnaBrzina: akt.average_speed,
-        maxBrzina: akt.max_speed,
-        kalorije: akt.calories,
-        polyline: akt.map?.summary_polyline || '',
-      });
+      await Korisnik.updateOne(
+        { _id: korisnikId, 'aktivnosti.stravaId': { $ne: String(akt.id) } },
+        {
+          $push: {
+            aktivnosti: {
+              stravaId: String(akt.id),
+              naziv: akt.name,
+              tip: akt.type,
+              datum: new Date(akt.start_date),
+              trajanje: akt.moving_time,
+              udaljenost: akt.distance,
+              visinskaRazlika: akt.total_elevation_gain,
+              prosjecnaBrzina: akt.average_speed,
+              maxBrzina: akt.max_speed,
+              kalorije: akt.calories,
+              polyline: akt.map?.summary_polyline || '',
+            },
+          },
+        }
+      );
     }
+
+    const korisnik = await Korisnik.findById(korisnikId);
 
     await dopuniDetaljima(korisnik, token);
 
@@ -243,5 +251,67 @@ export const dohvatiAktivnosti = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška.', error: err.message });
+  }
+};
+
+const TIPOVI_REKORDA = {
+  trcanje: ['Run', 'TrailRun'],
+  bicikl: ['Ride', 'VirtualRide', 'EBikeRide'],
+  hodanje: ['Walk', 'Hike'],
+  plivanje: ['Swim'],
+};
+
+const DISTANCE_DEFS = [
+  { naziv: '1 km', cilj: 1 },
+  { naziv: '5 km', cilj: 5 },
+  { naziv: '10 km', cilj: 10 },
+  { naziv: 'Pola maratona', cilj: 21.1 },
+  { naziv: 'Maraton', cilj: 42.2 },
+];
+
+function tolerancijaZa(cilj) {
+  if (cilj <= 1) return 0.1;
+  if (cilj <= 5) return 0.3;
+  if (cilj <= 10) return 0.5;
+  if (cilj <= 21.1) return 1;
+  return 2;
+}
+
+export const dohvatiRekorde = async (req, res) => {
+  try {
+    const korisnik = await Korisnik.findById(req.korisnik._id).select('aktivnosti');
+
+    const rezultat = {};
+    for (const [kategorija, tipovi] of Object.entries(TIPOVI_REKORDA)) {
+      const aktivnostiKategorije = korisnik.aktivnosti.filter(a => tipovi.includes(a.tip));
+
+      rezultat[kategorija] = DISTANCE_DEFS.map(def => {
+        const tol = tolerancijaZa(def.cilj);
+        const kandidati = aktivnostiKategorije.filter(a => {
+          const km = (a.udaljenost || 0) / 1000;
+          return km >= def.cilj - tol && km <= def.cilj + tol;
+        });
+
+        if (kandidati.length === 0) {
+          return { naziv: def.naziv, cilj: def.cilj, ostvareno: false };
+        }
+
+        const najbolja = kandidati.reduce((naj, a) => (a.trajanje < naj.trajanje ? a : naj));
+
+        return {
+          naziv: def.naziv,
+          cilj: def.cilj,
+          ostvareno: true,
+          vrijeme: najbolja.trajanje,
+          brzina: najbolja.prosjecnaBrzina,
+          datum: najbolja.datum,
+          aktivnostNaziv: najbolja.naziv,
+        };
+      });
+    }
+
+    res.json({ rekordi: rezultat });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju rekorda.', error: err.message });
   }
 };

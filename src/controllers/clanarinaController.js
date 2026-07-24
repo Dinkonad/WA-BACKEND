@@ -71,6 +71,15 @@ export const dohvatiMojZahtjev = async (req, res) => {
   }
 };
 
+export const dohvatiMojePovijestClanarina = async (req, res) => {
+  try {
+    const zahtjevi = await Clanarina.find({ korisnikId: req.korisnik._id }).sort({ createdAt: -1 });
+    res.json({ zahtjevi });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju povijesti.', error: err.message });
+  }
+};
+
 export const dohvatiZahtjeve = async (req, res) => {
   try {
     const filter = {};
@@ -243,6 +252,35 @@ export const dohvatiBrojUTeretani = async (req, res) => {
     res.json({ broj });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri dohvaćanju broja.', error: err.message });
+  }
+};
+
+export const dohvatiTrenutnoUTeretani = async (req, res) => {
+  try {
+    const danasnji = await Ulazak.find({ createdAt: { $gte: pocetakDana() } }).sort({ createdAt: 1 });
+    const zadnjiPoKorisniku = new Map();
+    for (const u of danasnji) {
+      zadnjiPoKorisniku.set(String(u.korisnikId), u);
+    }
+
+    const unutraIds = [...zadnjiPoKorisniku.entries()]
+      .filter(([, u]) => u.tip === 'ulaz')
+      .map(([korisnikId, u]) => ({ korisnikId, vrijemeUlaska: u.createdAt }));
+
+    const korisnici = await Korisnik.find({ _id: { $in: unutraIds.map(u => u.korisnikId) } }).select('ime strava.profilnaSlika');
+
+    const lista = unutraIds
+      .map(({ korisnikId, vrijemeUlaska }) => {
+        const korisnik = korisnici.find(k => String(k._id) === korisnikId);
+        if (!korisnik) return null;
+        return { korisnikId, ime: korisnik.ime, slika: korisnik.strava?.profilnaSlika || null, vrijemeUlaska };
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.vrijemeUlaska) - new Date(a.vrijemeUlaska));
+
+    res.json({ lista, broj: lista.length });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju popisa.', error: err.message });
   }
 };
 

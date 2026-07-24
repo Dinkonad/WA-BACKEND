@@ -9,6 +9,8 @@ import feedRouter from './src/routes/feed.js';
 import izazoviRouter from './src/routes/izazovi.js';
 import clanarinaRouter from './src/routes/clanarina.js';
 import financijeRouter from './src/routes/financije.js';
+import feedbackRouter from './src/routes/feedback.js';
+import obavijestiRouter from './src/routes/obavijesti.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +33,8 @@ app.use('/api', feedRouter);
 app.use('/api', izazoviRouter);
 app.use('/api', clanarinaRouter);
 app.use('/api', financijeRouter);
+app.use('/api', feedbackRouter);
+app.use('/api', obavijestiRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 

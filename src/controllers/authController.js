@@ -80,12 +80,55 @@ export const dohvatiProfil = async (req, res) => {
       ime: req.korisnik.ime,
       email: req.korisnik.email,
       uloga: req.korisnik.uloga,
+      datumRodjenja: req.korisnik.datumRodjenja,
+      spol: req.korisnik.spol,
+      telefon: req.korisnik.telefon,
+      visina: req.korisnik.visina,
+      tezina: req.korisnik.tezina,
+      adresa: req.korisnik.adresa,
+      clanOd: req.korisnik.createdAt,
       strava: req.korisnik.strava ? {
         profilnaSlika: req.korisnik.strava.profilnaSlika,
         grad: req.korisnik.strava.grad,
         drzava: req.korisnik.strava.drzava,
         statistike: req.korisnik.strava.statistike,
+        povezano: !!req.korisnik.strava.accessToken,
       } : null,
     },
   });
+};
+
+export const azurirajProfil = async (req, res) => {
+  try {
+    const { ime, datumRodjenja, spol, telefon, visina, tezina, adresa } = req.body;
+
+    if (ime !== undefined) {
+      if (!ime.trim()) return res.status(400).json({ poruka: 'Ime ne može biti prazno.' });
+      req.korisnik.ime = ime.trim();
+    }
+    if (datumRodjenja !== undefined) req.korisnik.datumRodjenja = datumRodjenja || null;
+    if (spol !== undefined) req.korisnik.spol = spol;
+    if (telefon !== undefined) req.korisnik.telefon = telefon;
+    if (visina !== undefined) req.korisnik.visina = visina;
+    if (tezina !== undefined) req.korisnik.tezina = tezina;
+    if (adresa !== undefined) req.korisnik.adresa = adresa;
+
+    await req.korisnik.save();
+
+    res.json({
+      korisnik: {
+        id: req.korisnik._id,
+        ime: req.korisnik.ime,
+        email: req.korisnik.email,
+        datumRodjenja: req.korisnik.datumRodjenja,
+        spol: req.korisnik.spol,
+        telefon: req.korisnik.telefon,
+        visina: req.korisnik.visina,
+        tezina: req.korisnik.tezina,
+        adresa: req.korisnik.adresa,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri ažuriranju profila.', error: err.message });
+  }
 };
