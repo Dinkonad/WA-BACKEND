@@ -14,6 +14,8 @@ import {
   dohvatiIskoristenost,
   dohvatiMojePovijestClanarina,
   dohvatiTrenutnoUTeretani,
+  dohvatiNaRecepciji,
+  oznaciPlaceno,
 } from '../controllers/clanarinaController.js';
 import { zastitiRutu, samoKnjigovodstvo, samoRecepcija } from '../middleware/auth.js';
 
@@ -26,6 +28,8 @@ router.get('/clanarina/moja-povijest', zastitiRutu, dohvatiMojePovijestClanarina
 router.get('/clanarina/qr', zastitiRutu, dohvatiQrKod);
 router.get('/clanarina/broj-u-teretani', zastitiRutu, dohvatiBrojUTeretani);
 router.get('/clanarina/trenutno-u-teretani', zastitiRutu, samoRecepcija, dohvatiTrenutnoUTeretani);
+router.get('/clanarina/na-recepciji', zastitiRutu, samoRecepcija, dohvatiNaRecepciji);
+router.put('/clanarina/:id/oznaci-placeno', zastitiRutu, samoRecepcija, oznaciPlaceno);
 router.post('/clanarina/qr/provjeri', zastitiRutu, samoRecepcija, provjeriQrKod);
 router.get('/clanarina/retencija', zastitiRutu, samoKnjigovodstvo, dohvatiRetenciju);
 router.get('/clanarina/iskoristenost', zastitiRutu, samoKnjigovodstvo, dohvatiIskoristenost);

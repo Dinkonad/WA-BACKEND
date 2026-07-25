@@ -13,10 +13,18 @@ function pocetakDana() {
 }
 
 export const PLANOVI = {
-  student: { naziv: 'Student', mjesecno: 25, znacajke: ['Pristup teretani', 'Od 8 do 15 sati'] },
-  basic: { naziv: 'Basic', mjesecno: 35, znacajke: ['Pristup teretani', 'Cijeli dan pristup'] },
-  premium: { naziv: 'Premium', mjesecno: 70, znacajke: ['Pristup teretani', 'Sauna'] },
+  dnevno: { naziv: 'Dnevno', cijena: 8, trajanjeDana: 1, bestseller: false, premium: false, znacajke: ['Pristup teretani 1 dan'] },
+  tjedno: { naziv: 'Tjedno', cijena: 20, trajanjeDana: 7, bestseller: false, premium: false, znacajke: ['Pristup teretani 7 dana'] },
+  mjesecno: { naziv: 'Mjesečno', cijena: 35, trajanjeDana: 30, bestseller: true, premium: false, znacajke: ['Pristup teretani 30 dana', 'Cijeli dan pristup'] },
+  premium: { naziv: 'Premium', cijena: 60, trajanjeDana: 30, bestseller: false, premium: true, znacajke: ['Pristup teretani 30 dana', 'Treninzi s trenerom', 'Recepti i prehrana', 'Sauna'] },
 };
+
+// Legacy planovi (student/basic) vise se ne nude, ali stari zahtjevi ih jos mogu imati - fallback na 30 dana.
+const LEGACY_TRAJANJE_DANA = 30;
+
+function trajanjeZaPlan(plan) {
+  return PLANOVI[plan]?.trajanjeDana ?? LEGACY_TRAJANJE_DANA;
+}
 
 export const dohvatiPlanove = (req, res) => {
   res.json({ planovi: PLANOVI });
@@ -24,24 +32,23 @@ export const dohvatiPlanove = (req, res) => {
 
 export const posaljiZahtjev = async (req, res) => {
   try {
-    const { plan, period, imePrezime, godiste, spol, broj } = req.body;
+    const { plan, imePrezime, godiste, spol, broj, nacinPlacanja } = req.body;
 
     if (!PLANOVI[plan]) return res.status(400).json({ poruka: 'Nepoznat plan.' });
-    if (!['mjesecno', 'godisnje'].includes(period)) return res.status(400).json({ poruka: 'Nepoznat period.' });
     if (!imePrezime || !godiste || !spol || !broj) return res.status(400).json({ poruka: 'Popuni sva polja.' });
 
-    const cijenaMjesecno = PLANOVI[plan].mjesecno;
-    const cijena = period === 'godisnje' ? cijenaMjesecno * 12 : cijenaMjesecno;
+    const nacin = ['uplatnica', 'recepcija'].includes(nacinPlacanja) ? nacinPlacanja : 'uplatnica';
+    const cijena = PLANOVI[plan].cijena;
 
     const zahtjev = await Clanarina.create({
       korisnikId: req.korisnik._id,
       plan,
-      period,
       cijena,
       imePrezime,
       godiste,
       spol,
       broj,
+      nacinPlacanja: nacin,
     });
 
     res.status(201).json({ zahtjev });
@@ -49,8 +56,6 @@ export const posaljiZahtjev = async (req, res) => {
     res.status(500).json({ poruka: 'Greška pri slanju zahtjeva.', error: err.message });
   }
 };
-
-const TRAJANJE_DANA = 30;
 
 export const dohvatiMojZahtjev = async (req, res) => {
   try {
@@ -61,7 +66,7 @@ export const dohvatiMojZahtjev = async (req, res) => {
 
     if (zahtjev && zahtjev.status === 'odobreno' && zahtjev.datumObrade) {
       vrijediDo = new Date(zahtjev.datumObrade);
-      vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+      vrijediDo.setDate(vrijediDo.getDate() + trajanjeZaPlan(zahtjev.plan));
       istekla = new Date() > vrijediDo;
     }
 
@@ -110,7 +115,7 @@ export const odobriZahtjev = async (req, res) => {
       kategorija: 'Članarina',
       ime: zahtjev.imePrezime,
       iznos: zahtjev.cijena,
-      opis: `${zahtjev.plan.toUpperCase()} · ${zahtjev.period === 'godisnje' ? 'godišnje' : 'mjesečno'}`,
+      opis: `${PLANOVI[zahtjev.plan]?.naziv || zahtjev.plan}`,
       datum: zahtjev.datumObrade,
       automatski: true,
       clanarinaId: zahtjev._id,
@@ -120,6 +125,51 @@ export const odobriZahtjev = async (req, res) => {
     res.json({ zahtjev });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri odobravanju.', error: err.message });
+  }
+};
+
+export const oznaciPlaceno = async (req, res) => {
+  try {
+    const { nacinNaplate } = req.body;
+    if (!['gotovina', 'kartica'].includes(nacinNaplate)) {
+      return res.status(400).json({ poruka: 'Odaberi način naplate (gotovina/kartica).' });
+    }
+
+    const zahtjev = await Clanarina.findById(req.params.id);
+    if (!zahtjev) return res.status(404).json({ poruka: 'Zahtjev nije pronađen.' });
+
+    zahtjev.status = 'odobreno';
+    zahtjev.nacinNaplate = nacinNaplate;
+    zahtjev.obradioId = req.korisnik._id;
+    zahtjev.datumObrade = new Date();
+    await zahtjev.save();
+
+    await Financija.create({
+      vrsta: 'prihod',
+      kategorija: 'Članarina',
+      ime: zahtjev.imePrezime,
+      iznos: zahtjev.cijena,
+      opis: `${PLANOVI[zahtjev.plan]?.naziv || zahtjev.plan} · na recepciji (${nacinNaplate === 'gotovina' ? 'gotovina' : 'kartica'})`,
+      datum: zahtjev.datumObrade,
+      automatski: true,
+      clanarinaId: zahtjev._id,
+      kreiraoId: req.korisnik._id,
+    });
+
+    res.json({ zahtjev });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri označavanju plaćanja.', error: err.message });
+  }
+};
+
+export const dohvatiNaRecepciji = async (req, res) => {
+  try {
+    const zahtjevi = await Clanarina.find({ status: 'na_cekanju', nacinPlacanja: 'recepcija' })
+      .populate('korisnikId', 'ime email')
+      .sort({ createdAt: 1 });
+    res.json({ zahtjevi });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju.', error: err.message });
   }
 };
 
@@ -149,7 +199,7 @@ export const dohvatiQrKod = async (req, res) => {
     }
 
     const vrijediDo = new Date(zahtjev.datumObrade);
-    vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+    vrijediDo.setDate(vrijediDo.getDate() + trajanjeZaPlan(zahtjev.plan));
 
     if (new Date() > vrijediDo) {
       return res.json({ token: null });
@@ -192,7 +242,7 @@ export const provjeriQrKod = async (req, res) => {
     }
 
     const vrijediDo = new Date(zahtjev.datumObrade);
-    vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+    vrijediDo.setDate(vrijediDo.getDate() + trajanjeZaPlan(zahtjev.plan));
     if (new Date() > vrijediDo) {
       return res.json({ validno: false, poruka: 'Članarina je istekla.' });
     }
@@ -315,7 +365,7 @@ export const dohvatiRetenciju = async (req, res) => {
       if (z.status !== 'odobreno' || !z.datumObrade) continue;
 
       const vrijediDo = new Date(z.datumObrade);
-      vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+      vrijediDo.setDate(vrijediDo.getDate() + trajanjeZaPlan(z.plan));
 
       if (sada > vrijediDo) {
         istekli++;
@@ -324,7 +374,6 @@ export const dohvatiRetenciju = async (req, res) => {
           ime: z.korisnikId?.ime || z.imePrezime,
           email: z.korisnikId?.email || null,
           plan: z.plan,
-          period: z.period,
           istekaoDatum: vrijediDo,
           danaOdIsteka,
         });
@@ -353,7 +402,7 @@ export const dohvatiIskoristenost = async (req, res) => {
     for (const z of zadnji.values()) {
       if (!z.datumObrade) continue;
       const vrijediDo = new Date(z.datumObrade);
-      vrijediDo.setDate(vrijediDo.getDate() + TRAJANJE_DANA);
+      vrijediDo.setDate(vrijediDo.getDate() + trajanjeZaPlan(z.plan));
       if (sada > vrijediDo) continue;
 
       if (!poPlanu[z.plan]) poPlanu[z.plan] = { korisnici: [], ukupnaCijena: 0 };

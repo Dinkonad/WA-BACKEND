@@ -186,37 +186,29 @@ function izracunajDnevno(korisnik, izazov, odDatuma) {
   while (dan <= zadnjiDanZaProvjeru) {
     const jeDanasnji = istiDan(dan, danas);
     const dnevneAktivnosti = korisnik.aktivnosti.filter(a => istiDan(new Date(a.datum), dan));
-    let danProsao = false;
+
     let danBodovi = 0;
-    const ispunjeniUvjeti = [];
-
-    izazov.uvjeti.forEach(uvjet => {
-      const relevantne = dnevneAktivnosti.filter(a => a.tip === uvjet.tip);
-
-      if (uvjet.mjera === 'broj') {
-        if (relevantne.length >= uvjet.cilj) {
-          danBodovi += uvjet.bodovi;
-          danProsao = true;
-          ispunjeniUvjeti.push({ tip: uvjet.tip, mjera: uvjet.mjera, cilj: uvjet.cilj, napredak: relevantne.length, bodovi: uvjet.bodovi });
-        }
-        return;
-      }
-
-      const izracunajVrijednost = MJERA_POLJE[uvjet.mjera] || (() => 0);
-      const najboljaVrijednost = relevantne.reduce((maks, a) => Math.max(maks, izracunajVrijednost(a)), 0);
-
-      if (najboljaVrijednost >= uvjet.cilj) {
-        danBodovi += uvjet.bodovi;
-        danProsao = true;
-        ispunjeniUvjeti.push({ tip: uvjet.tip, mjera: uvjet.mjera, cilj: uvjet.cilj, napredak: najboljaVrijednost, bodovi: uvjet.bodovi });
-      }
+    const uvjetiInfo = izazov.uvjeti.map(uvjet => {
+      const { bodovi: uvjetBodovi, napredak, aktivnosti } = bodoviIAktivnostiZaUvjet(dnevneAktivnosti, uvjet);
+      danBodovi += uvjetBodovi;
+      return {
+        tip: uvjet.tip,
+        mjera: uvjet.mjera,
+        cilj: uvjet.cilj,
+        bodoviPoPragu: uvjet.bodovi,
+        napredak,
+        bodoviOstvareno: uvjetBodovi,
+        aktivnosti,
+      };
     });
+
+    const danProsao = danBodovi > 0;
 
     dani.push({
       datum: new Date(dan),
       prosao: danProsao,
       bodovi: danBodovi,
-      uvjetiIspunjeni: ispunjeniUvjeti,
+      uvjeti: uvjetiInfo,
       aktivnosti: dnevneAktivnosti.map(aktivnostSazetak),
     });
 
