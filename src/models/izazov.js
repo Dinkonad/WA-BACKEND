@@ -28,6 +28,7 @@ const izazovSchema = new mongoose.Schema(
     opis: { type: String, trim: true },
     vrsta: { type: String, enum: ['solo', 'tim'], required: true },
     nacin: { type: String, enum: ['kumulativno', 'dnevno'], default: 'kumulativno' },
+    velicinaTima: { type: Number, default: null },
     pocetak: { type: Date, required: true },
     kraj: { type: Date, required: true },
     uvjeti: {
