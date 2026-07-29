@@ -163,15 +163,20 @@ export const sinkronizirajAktivnosti = async (korisnikId, accessToken) => {
     const osvjezeni = await osvjeziTokenAkoTreba(korisnikPrije);
     const token = osvjezeni.strava.accessToken || accessToken;
 
-    const odgovor = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { per_page: 100, page: 1 },
-    });
+    const aktivnosti = [];
+    let stranica = 1;
+    const MAX_STRANICA = 10;
+    while (stranica <= MAX_STRANICA) {
+      const odgovor = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { per_page: 100, page: stranica },
+      });
+      if (!odgovor.data.length) break;
+      aktivnosti.push(...odgovor.data);
+      if (odgovor.data.length < 100) break;
+      stranica++;
+    }
 
-    const aktivnosti = odgovor.data;
-
-    // Atomski $push uz uvjet da stravaId još ne postoji - sprječava duplikate
-    // ako se sinkronizacija pokrene istovremeno iz dva mjesta (login + ručni sync).
     for (const akt of aktivnosti) {
       await Korisnik.updateOne(
         { _id: korisnikId, 'aktivnosti.stravaId': { $ne: String(akt.id) } },

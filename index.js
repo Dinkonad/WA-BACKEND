@@ -13,7 +13,6 @@ import feedbackRouter from './src/routes/feedback.js';
 import obavijestiRouter from './src/routes/obavijesti.js';
 import vjezbeRouter from './src/routes/vjezbe.js';
 import treninziRouter from './src/routes/treninzi.js';
-import { pokreniDnevnoOsvjezavanjeIzazova } from './src/poslovi/osvjezavanjeIzazova.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,5 +44,4 @@ app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 
 poveziNaBazu().then(() => {
   app.listen(PORT, () => console.log(`Server radi na portu ${PORT}`));
-  pokreniDnevnoOsvjezavanjeIzazova();
 });

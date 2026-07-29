@@ -52,7 +52,16 @@ export const dohvatiIzazove = async (req, res) => {
   try {
     const izazovi = await Izazov.find().sort({ pocetak: -1 });
     const sad = new Date();
+    const danas = pocetakDana(sad);
     const korisnikId = String(req.korisnik._id);
+
+    for (const izazov of izazovi) {
+      if (krajDana(izazov.kraj) < sad) continue;
+      if (izazov.sudionici.length === 0) continue;
+      if (!izazov.ljestvicaAzurirana || izazov.ljestvicaAzurirana < danas) {
+        await azurirajBodoveZaIzazov(izazov);
+      }
+    }
 
     const mapiraj = (i) => {
       const obj = i.toObject();
@@ -489,15 +498,5 @@ export const obrisiIzazov = async (req, res) => {
     res.json({ poruka: 'Izazov obrisan.' });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri brisanju izazova.', error: err.message });
-  }
-};
-
-export const dohvatiIzazov = async (req, res) => {
-  try {
-    const izazov = await Izazov.findById(req.params.id);
-    if (!izazov) return res.status(404).json({ poruka: 'Izazov nije pronađen.' });
-    res.json({ izazov });
-  } catch (err) {
-    res.status(500).json({ poruka: 'Greška.', error: err.message });
   }
 };

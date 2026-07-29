@@ -3,7 +3,6 @@ import {
   kreirajIzazov,
   azurirajIzazov,
   dohvatiIzazove,
-  dohvatiIzazov,
   obrisiIzazov,
   pridruziSeIzazovu,
   dohvatiLjestvicu,
@@ -19,7 +18,6 @@ import { zastitiRutu, samoadmin } from '../middleware/auth.js';
 const router = express.Router();
 
 router.get('/izazovi', zastitiRutu, dohvatiIzazove);
-router.get('/izazovi/:id', zastitiRutu, dohvatiIzazov);
 router.get('/izazovi/:id/ljestvica', zastitiRutu, dohvatiLjestvicu);
 router.post('/izazovi/:id/ljestvica/osvjezi', zastitiRutu, osvjeziLjestvicu);
 router.get('/izazovi/:id/sudionik/:korisnikId', zastitiRutu, dohvatiSudionikDetalje);

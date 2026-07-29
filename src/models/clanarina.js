@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const clanarinaSchema = new mongoose.Schema(
   {
     korisnikId: { type: mongoose.Schema.Types.ObjectId, ref: 'Korisnik', required: true },
-    plan: { type: String, enum: ['dnevno', 'tjedno', 'mjesecno', 'premium', 'student', 'basic'], required: true },
+    plan: { type: String, enum: ['dnevno', 'tjedno', 'mjesecno', 'premium'], required: true },
     period: { type: String, enum: ['mjesecno', 'godisnje'] },
     cijena: { type: Number, required: true },
     imePrezime: { type: String, required: true, trim: true },

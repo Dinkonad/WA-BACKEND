@@ -19,11 +19,8 @@ export const PLANOVI = {
   premium: { naziv: 'Premium', cijena: 60, trajanjeDana: 30, bestseller: false, premium: true, znacajke: ['Pristup teretani 30 dana', 'Treninzi s trenerom', 'Recepti i prehrana', 'Sauna'] },
 };
 
-// Legacy planovi (student/basic) vise se ne nude, ali stari zahtjevi ih jos mogu imati - fallback na 30 dana.
-const LEGACY_TRAJANJE_DANA = 30;
-
 function trajanjeZaPlan(plan) {
-  return PLANOVI[plan]?.trajanjeDana ?? LEGACY_TRAJANJE_DANA;
+  return PLANOVI[plan].trajanjeDana;
 }
 
 export const dohvatiPlanove = (req, res) => {
