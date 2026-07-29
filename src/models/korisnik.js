@@ -68,6 +68,7 @@ const korisnikSchema = new mongoose.Schema(
     visina: { type: Number },
     tezina: { type: Number },
     adresa: { type: String, trim: true },
+    slika: { type: String },
     webauthnChallenge: { type: String },
     autentifikatori: [autentifikatorSchema],
     strava: {

@@ -15,7 +15,7 @@ export const dohvatiFeed = async (req, res) => {
           _id: 0,
           autorId: '$_id',
           autorIme: '$ime',
-          autorSlika: '$strava.profilnaSlika',
+          autorSlika: { $ifNull: ['$slika', '$strava.profilnaSlika'] },
           aktivnost: '$aktivnosti',
         } },
     ]);

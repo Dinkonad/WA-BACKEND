@@ -13,6 +13,7 @@ import feedbackRouter from './src/routes/feedback.js';
 import obavijestiRouter from './src/routes/obavijesti.js';
 import vjezbeRouter from './src/routes/vjezbe.js';
 import treninziRouter from './src/routes/treninzi.js';
+import receptiRouter from './src/routes/recepti.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,7 @@ app.use('/api', feedbackRouter);
 app.use('/api', obavijestiRouter);
 app.use('/api', vjezbeRouter);
 app.use('/api', treninziRouter);
+app.use('/api', receptiRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
 

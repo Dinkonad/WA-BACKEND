@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import Korisnik from '../models/korisnik.js';
+import { uploadSliku } from '../services/supabase.js';
 
 const generirajToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -86,6 +87,7 @@ export const dohvatiProfil = async (req, res) => {
       visina: req.korisnik.visina,
       tezina: req.korisnik.tezina,
       adresa: req.korisnik.adresa,
+      slika: req.korisnik.slika,
       clanOd: req.korisnik.createdAt,
       strava: req.korisnik.strava ? {
         profilnaSlika: req.korisnik.strava.profilnaSlika,
@@ -126,9 +128,22 @@ export const azurirajProfil = async (req, res) => {
         visina: req.korisnik.visina,
         tezina: req.korisnik.tezina,
         adresa: req.korisnik.adresa,
+        slika: req.korisnik.slika,
       },
     });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri ažuriranju profila.', error: err.message });
+  }
+};
+
+export const uploadSlikuProfila = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ poruka: 'Slika je obavezna.' });
+    const url = await uploadSliku(req.file, 'profilne');
+    req.korisnik.slika = url;
+    await req.korisnik.save();
+    res.json({ slika: url });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri uploadu slike.', error: err.message });
   }
 };

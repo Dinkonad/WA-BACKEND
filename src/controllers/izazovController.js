@@ -114,13 +114,13 @@ export const dohvatiTimove = async (req, res) => {
     if (izazov.vrsta !== 'tim') return res.status(400).json({ poruka: 'Ovo nije timski izazov.' });
 
     const korisniciIds = izazov.timovi.flatMap(t => t.clanovi);
-    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('ime strava.profilnaSlika');
+    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('ime slika strava.profilnaSlika');
 
     const timovi = izazov.timovi.map(t => {
       const clanovi = t.clanovi
         .map(cid => {
           const k = korisnici.find(kk => kk._id.equals(cid));
-          return k ? { korisnikId: k._id, ime: k.ime, slika: k.strava?.profilnaSlika || null } : null;
+          return k ? { korisnikId: k._id, ime: k.ime, slika: k.slika || k.strava?.profilnaSlika || null } : null;
         })
         .filter(Boolean);
       return {
@@ -372,8 +372,13 @@ export const dohvatiLjestvicu = async (req, res) => {
     const izazov = await Izazov.findById(req.params.id);
     if (!izazov) return res.status(404).json({ poruka: 'Izazov nije pronađen.' });
 
+    const danas = pocetakDana(new Date());
+    if (izazov.sudionici.length > 0 && (!izazov.ljestvicaAzurirana || izazov.ljestvicaAzurirana < danas)) {
+      await azurirajBodoveZaIzazov(izazov);
+    }
+
     const korisniciIds = izazov.sudionici.map(s => s.korisnikId);
-    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('ime strava.profilnaSlika');
+    const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('ime slika strava.profilnaSlika');
 
     if (izazov.vrsta !== 'tim') {
       const ljestvica = izazov.sudionici
@@ -384,7 +389,7 @@ export const dohvatiLjestvicu = async (req, res) => {
           return {
             korisnikId: korisnik._id,
             ime: korisnik.ime,
-            slika: korisnik.strava?.profilnaSlika || null,
+            slika: korisnik.slika || korisnik.strava?.profilnaSlika || null,
             bodovi: sudionik.bodovi,
             status: sudionik.status,
             eliminiranDatum: sudionik.eliminiranDatum,
@@ -409,7 +414,7 @@ export const dohvatiLjestvicu = async (req, res) => {
             return {
               korisnikId: korisnik._id,
               ime: korisnik.ime,
-              slika: korisnik.strava?.profilnaSlika || null,
+              slika: korisnik.slika || korisnik.strava?.profilnaSlika || null,
               bodovi: s.bodovi,
               status: s.status,
               eliminiranDatum: s.eliminiranDatum,
@@ -470,7 +475,7 @@ export const dohvatiSudionikDetalje = async (req, res) => {
     const sudionik = izazov.sudionici.find(s => String(s.korisnikId) === req.params.korisnikId);
     if (!sudionik) return res.status(404).json({ poruka: 'Sudionik nije pronađen u ovom izazovu.' });
 
-    const korisnik = await Korisnik.findById(sudionik.korisnikId).select('ime strava.profilnaSlika aktivnosti');
+    const korisnik = await Korisnik.findById(sudionik.korisnikId).select('ime slika strava.profilnaSlika aktivnosti');
     if (!korisnik) return res.status(404).json({ poruka: 'Korisnik ne postoji.' });
 
     const odDatuma = sudionik.datumPridruzivanja > izazov.pocetak ? sudionik.datumPridruzivanja : izazov.pocetak;
@@ -481,7 +486,7 @@ export const dohvatiSudionikDetalje = async (req, res) => {
     res.json({
       korisnikId: korisnik._id,
       ime: korisnik.ime,
-      slika: korisnik.strava?.profilnaSlika || null,
+      slika: korisnik.slika || korisnik.strava?.profilnaSlika || null,
       datumPridruzivanja: sudionik.datumPridruzivanja,
       nacin: izazov.nacin,
       ...rezultat,

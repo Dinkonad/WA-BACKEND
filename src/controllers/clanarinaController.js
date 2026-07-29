@@ -271,13 +271,13 @@ export const provjeriQrKod = async (req, res) => {
 
     await Ulazak.create({ korisnikId: payload.korisnikId, tip });
 
-    const korisnik = await Korisnik.findById(payload.korisnikId).select('ime strava.profilnaSlika');
+    const korisnik = await Korisnik.findById(payload.korisnikId).select('ime slika strava.profilnaSlika');
 
     res.json({
       validno: true,
       tip,
       ime: korisnik?.ime || zahtjev.imePrezime,
-      slika: korisnik?.strava?.profilnaSlika || null,
+      slika: korisnik?.slika || korisnik?.strava?.profilnaSlika || null,
       plan: zahtjev.plan,
       vrijediDo,
       brojDanas: tip === 'ulaz' ? brojUlazaka + 1 : brojIzlazaka + 1,
@@ -314,13 +314,13 @@ export const dohvatiTrenutnoUTeretani = async (req, res) => {
       .filter(([, u]) => u.tip === 'ulaz')
       .map(([korisnikId, u]) => ({ korisnikId, vrijemeUlaska: u.createdAt }));
 
-    const korisnici = await Korisnik.find({ _id: { $in: unutraIds.map(u => u.korisnikId) } }).select('ime strava.profilnaSlika');
+    const korisnici = await Korisnik.find({ _id: { $in: unutraIds.map(u => u.korisnikId) } }).select('ime slika strava.profilnaSlika');
 
     const lista = unutraIds
       .map(({ korisnikId, vrijemeUlaska }) => {
         const korisnik = korisnici.find(k => String(k._id) === korisnikId);
         if (!korisnik) return null;
-        return { korisnikId, ime: korisnik.ime, slika: korisnik.strava?.profilnaSlika || null, vrijemeUlaska };
+        return { korisnikId, ime: korisnik.ime, slika: korisnik.slika || korisnik.strava?.profilnaSlika || null, vrijemeUlaska };
       })
       .filter(Boolean)
       .sort((a, b) => new Date(b.vrijemeUlaska) - new Date(a.vrijemeUlaska));
