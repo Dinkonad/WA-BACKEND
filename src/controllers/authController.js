@@ -1,5 +1,11 @@
 import jwt from 'jsonwebtoken';
 import Korisnik from '../models/korisnik.js';
+import Dolazak from '../models/dolazak.js';
+import Ulazak from '../models/ulazak.js';
+import Clanarina from '../models/clanarina.js';
+import Feedback from '../models/feedback.js';
+import TreningZavrsetak from '../models/treningZavrsetak.js';
+import Izazov from '../models/izazov.js';
 import { uploadSliku } from '../services/supabase.js';
 
 const generirajToken = (id) => {
@@ -145,5 +151,81 @@ export const uploadSlikuProfila = async (req, res) => {
     res.json({ slika: url });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri uploadu slike.', error: err.message });
+  }
+};
+
+export const dohvatiKorisnike = async (req, res) => {
+  try {
+    const korisnici = await Korisnik.find().select('ime email uloga createdAt').sort({ createdAt: -1 });
+    res.json({ korisnici });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri dohvaćanju korisnika.', error: err.message });
+  }
+};
+
+export const obrisiKorisnika = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (id === String(req.korisnik._id)) {
+      return res.status(400).json({ poruka: 'Ne možeš obrisati sam sebe.' });
+    }
+
+    const korisnik = await Korisnik.findById(id);
+    if (!korisnik) return res.status(404).json({ poruka: 'Korisnik nije pronađen.' });
+
+    // Zapisi vezani isključivo uz ovog korisnika - brišu se u potpunosti.
+    await Promise.all([
+      Dolazak.deleteMany({ korisnikId: id }),
+      Ulazak.deleteMany({ korisnikId: id }),
+      Clanarina.deleteMany({ korisnikId: id }),
+      Feedback.deleteMany({ korisnikId: id }),
+      TreningZavrsetak.deleteMany({ korisnikId: id }),
+    ]);
+
+    // Izazovi: ukloni sudioništvo i članstvo u timovima. Ako je bio kapetan, prenesi
+    // kapetanstvo na drugog preostalog člana, ili raspusti tim ako je time ostao prazan.
+    const izazovi = await Izazov.find({
+      $or: [{ 'sudionici.korisnikId': id }, { 'timovi.clanovi': id }],
+    });
+    for (const izazov of izazovi) {
+      izazov.timovi.forEach(t => {
+        t.clanovi = t.clanovi.filter(c => String(c) !== id);
+      });
+      izazov.timovi = izazov.timovi.filter(t => {
+        if (t.clanovi.length === 0) return false;
+        if (String(t.kapetan) === id) t.kapetan = t.clanovi[0];
+        return true;
+      });
+      const preostaliTimIds = izazov.timovi.map(t => String(t._id));
+      izazov.sudionici = izazov.sudionici.filter(s => {
+        if (String(s.korisnikId) === id) return false;
+        if (s.timId && !preostaliTimIds.includes(String(s.timId))) return false;
+        return true;
+      });
+      await izazov.save();
+    }
+
+    // Tuđe aktivnosti: ukloni lajkove ovog korisnika i odveži ga kao autora komentara
+    // (sam tekst komentara i ime ostaju, samo referenca na obrisani račun nestaje).
+    const sTragovima = await Korisnik.find({
+      $or: [{ 'aktivnosti.lajkovi': id }, { 'aktivnosti.komentari.korisnikId': id }],
+    }).select('aktivnosti');
+
+    for (const drugi of sTragovima) {
+      drugi.aktivnosti.forEach(a => {
+        a.lajkovi = a.lajkovi.filter(l => String(l) !== id);
+        a.komentari.forEach(k => {
+          if (k.korisnikId && String(k.korisnikId) === id) k.korisnikId = null;
+        });
+      });
+      await drugi.save();
+    }
+
+    await Korisnik.findByIdAndDelete(id);
+
+    res.json({ poruka: 'Korisnik i svi njegovi tragovi u bazi su obrisani.' });
+  } catch (err) {
+    res.status(500).json({ poruka: 'Greška pri brisanju korisnika.', error: err.message });
   }
 };
