@@ -432,7 +432,7 @@ export const dohvatiLjestvicu = async (req, res) => {
   }
 };
 
-export async function azurirajBodoveZaIzazov(izazov) {
+async function azurirajBodoveZaIzazov(izazov) {
   const korisniciIds = izazov.sudionici.map(s => s.korisnikId);
   const korisnici = await Korisnik.find({ _id: { $in: korisniciIds } }).select('aktivnosti');
 

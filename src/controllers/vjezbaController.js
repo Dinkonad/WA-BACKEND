@@ -1,6 +1,6 @@
 import Vjezba from '../models/vjezba.js';
 
-export const KATEGORIJE = [
+const KATEGORIJE = [
   { kljuc: 'prsa', naziv: 'Prsa' },
   { kljuc: 'leđa', naziv: 'Leđa' },
   { kljuc: 'ramena', naziv: 'Ramena' },
@@ -11,7 +11,7 @@ export const KATEGORIJE = [
   { kljuc: 'kardio', naziv: 'Kardio' },
 ];
 
-export const RAZINE = [
+const RAZINE = [
   { kljuc: 'pocetnik', naziv: 'Početnik', opis: '0-6 mjeseci treninga' },
   { kljuc: 'amater', naziv: 'Amater', opis: '6-18 mjeseci treninga' },
   { kljuc: 'pro', naziv: 'Pro', opis: '18+ mjeseci treninga' },

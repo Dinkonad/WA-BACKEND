@@ -12,7 +12,7 @@ function pocetakDana() {
   return d;
 }
 
-export const PLANOVI = {
+const PLANOVI = {
   dnevno: { naziv: 'Dnevno', cijena: 8, trajanjeDana: 1, bestseller: false, premium: false, znacajke: ['Pristup teretani 1 dan'] },
   tjedno: { naziv: 'Tjedno', cijena: 20, trajanjeDana: 7, bestseller: false, premium: false, znacajke: ['Pristup teretani 7 dana'] },
   mjesecno: { naziv: 'Mjesečno', cijena: 35, trajanjeDana: 30, bestseller: true, premium: false, znacajke: ['Pristup teretani 30 dana', 'Cijeli dan pristup'] },
@@ -352,7 +352,7 @@ export const dohvatiRetenciju = async (req, res) => {
     let aktivnih = 0;
     let istekli = 0;
     let naCekanju = 0;
-    const churnLista = [];
+    const istekliClanovi = [];
 
     for (const z of zadnji.values()) {
       if (z.status === 'na_cekanju') {
@@ -367,7 +367,7 @@ export const dohvatiRetenciju = async (req, res) => {
       if (sada > vrijediDo) {
         istekli++;
         const danaOdIsteka = Math.floor((sada.getTime() - vrijediDo.getTime()) / (1000 * 60 * 60 * 24));
-        churnLista.push({
+        istekliClanovi.push({
           ime: z.korisnikId?.ime || z.imePrezime,
           email: z.korisnikId?.email || null,
           plan: z.plan,
@@ -379,9 +379,9 @@ export const dohvatiRetenciju = async (req, res) => {
       }
     }
 
-    churnLista.sort((a, b) => b.danaOdIsteka - a.danaOdIsteka);
+    istekliClanovi.sort((a, b) => b.danaOdIsteka - a.danaOdIsteka);
 
-    res.json({ aktivnih, istekli, naCekanju, churnLista });
+    res.json({ aktivnih, istekli, naCekanju, istekliClanovi });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri dohvaćanju retencije.', error: err.message });
   }

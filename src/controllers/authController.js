@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
 import Korisnik from '../models/korisnik.js';
-import Dolazak from '../models/dolazak.js';
 import Ulazak from '../models/ulazak.js';
 import Clanarina from '../models/clanarina.js';
 import Feedback from '../models/feedback.js';
@@ -176,7 +175,6 @@ export const obrisiKorisnika = async (req, res) => {
 
     // Zapisi vezani isključivo uz ovog korisnika - brišu se u potpunosti.
     await Promise.all([
-      Dolazak.deleteMany({ korisnikId: id }),
       Ulazak.deleteMany({ korisnikId: id }),
       Clanarina.deleteMany({ korisnikId: id }),
       Feedback.deleteMany({ korisnikId: id }),

@@ -40,7 +40,6 @@ const stravaAktivnostSchema = new mongoose.Schema({
   prosjecnaBrzina: { type: Number },
   maxBrzina: { type: Number },
   kalorije: { type: Number },
-  karta: { type: String },
   polyline: { type: String },
   prosjecniPuls: { type: Number },
   maxPuls: { type: Number },

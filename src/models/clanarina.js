@@ -7,7 +7,7 @@ const clanarinaSchema = new mongoose.Schema(
     period: { type: String, enum: ['mjesecno', 'godisnje'] },
     cijena: { type: Number, required: true },
     imePrezime: { type: String, required: true, trim: true },
-    godiste: { type: Number, required: true },
+    godiste: { type: Number, required: true, min: 1900, max: new Date().getFullYear() },
     spol: { type: String, required: true, trim: true },
     broj: { type: String, required: true, trim: true },
     nacinPlacanja: { type: String, enum: ['uplatnica', 'recepcija'], default: 'uplatnica' },

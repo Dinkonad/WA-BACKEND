@@ -1,6 +1,6 @@
 import Financija from '../models/financija.js';
 
-export const KATEGORIJE = {
+const KATEGORIJE = {
   prihod: ['Donacije', 'Sponzorstvo', 'Ostalo'],
   rashod: ['Zaposlenici', 'Režije', 'Oprema', 'Ostalo'],
 };
@@ -155,12 +155,12 @@ export const dohvatiStatistiku = async (req, res) => {
       });
     }
 
-    const rashodPoKategoriji = {};
+    const zbrojPoKategoriji = {};
     stavke.filter(s => s.vrsta === 'rashod').forEach(s => {
-      rashodPoKategoriji[s.kategorija] = (rashodPoKategoriji[s.kategorija] || 0) + s.iznos;
+      zbrojPoKategoriji[s.kategorija] = (zbrojPoKategoriji[s.kategorija] || 0) + s.iznos;
     });
 
-    const rashodBreakdown = Object.entries(rashodPoKategoriji)
+    const rashodPoKategoriji = Object.entries(zbrojPoKategoriji)
       .sort((a, b) => b[1] - a[1])
       .map(([kategorija, iznos]) => ({
         kategorija,
@@ -174,7 +174,7 @@ export const dohvatiStatistiku = async (req, res) => {
       ukupnoRashod,
       neto: ukupnoPrihod - ukupnoRashod,
       bucketi,
-      rashodBreakdown,
+      rashodPoKategoriji,
     });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri računanju statistike.', error: err.message });
