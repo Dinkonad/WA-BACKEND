@@ -29,20 +29,20 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use('/api', authRouter);
-app.use('/api', webauthnRouter);
-app.use('/api', stravaRouter);
-app.use('/api', feedRouter);
-app.use('/api', izazoviRouter);
-app.use('/api', clanarinaRouter);
-app.use('/api', financijeRouter);
-app.use('/api', feedbackRouter);
-app.use('/api', obavijestiRouter);
-app.use('/api', vjezbeRouter);
-app.use('/api', treninziRouter);
-app.use('/api', receptiRouter);
+app.use(authRouter);
+app.use(webauthnRouter);
+app.use(stravaRouter);
+app.use(feedRouter);
+app.use(izazoviRouter);
+app.use(clanarinaRouter);
+app.use(financijeRouter);
+app.use(feedbackRouter);
+app.use(obavijestiRouter);
+app.use(vjezbeRouter);
+app.use(treninziRouter);
+app.use(receptiRouter);
 
-app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
+app.get('/health', (req, res) => res.json({ status: 'OK' }));
 
 poveziNaBazu().then(() => {
   app.listen(PORT, () => console.log(`Server radi na portu ${PORT}`));

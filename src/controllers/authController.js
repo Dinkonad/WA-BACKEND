@@ -173,7 +173,6 @@ export const obrisiKorisnika = async (req, res) => {
     const korisnik = await Korisnik.findById(id);
     if (!korisnik) return res.status(404).json({ poruka: 'Korisnik nije pronađen.' });
 
-    // Zapisi vezani isključivo uz ovog korisnika - brišu se u potpunosti.
     await Promise.all([
       Ulazak.deleteMany({ korisnikId: id }),
       Clanarina.deleteMany({ korisnikId: id }),
@@ -181,8 +180,6 @@ export const obrisiKorisnika = async (req, res) => {
       TreningZavrsetak.deleteMany({ korisnikId: id }),
     ]);
 
-    // Izazovi: ukloni sudioništvo i članstvo u timovima. Ako je bio kapetan, prenesi
-    // kapetanstvo na drugog preostalog člana, ili raspusti tim ako je time ostao prazan.
     const izazovi = await Izazov.find({
       $or: [{ 'sudionici.korisnikId': id }, { 'timovi.clanovi': id }],
     });
@@ -203,9 +200,7 @@ export const obrisiKorisnika = async (req, res) => {
       });
       await izazov.save();
     }
-
-    // Tuđe aktivnosti: ukloni lajkove ovog korisnika i odveži ga kao autora komentara
-    // (sam tekst komentara i ime ostaju, samo referenca na obrisani račun nestaje).
+    
     const sTragovima = await Korisnik.find({
       $or: [{ 'aktivnosti.lajkovi': id }, { 'aktivnosti.komentari.korisnikId': id }],
     }).select('aktivnosti');

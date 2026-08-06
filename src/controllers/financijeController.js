@@ -45,7 +45,7 @@ export const dohvatiFinancije = async (req, res) => {
     res.json({ stavke });
   } catch (err) {
     res.status(500).json({ poruka: 'Greška pri dohvaćanju.', error: err.message });
-  }
+  } 
 };
 
 export const obrisiFinanciju = async (req, res) => {
